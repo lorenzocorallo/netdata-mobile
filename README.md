@@ -16,11 +16,12 @@ See [PROXMOX_DEPLOYMENT.md](./PROXMOX_DEPLOYMENT.md) for service commands, firew
 
 - Mobile overview for CPU, memory, disk, network, and host health
 - Interactive TanStack time-series charts
+- Selectable 5-minute through 7-day chart windows
 - Compact metric-family filtering with no horizontal scrolling
 - Metric details with dimensions and min/current/max values
 - Active and historical Netdata alerts
 - ZFS pool aggregates, health, capacity, fragmentation, and full dataset hierarchy
-- Per-dataset mountpoint, quota, used space, and remaining space from local read-only ZFS commands
+- Per-dataset used/free space with quota, refquota, unlimited, high-quota, and zvol-size distinctions
 - Configurable refresh interval and API endpoint
 - PWA manifest, offline application shell, and responsive phone navigation
 - Built-in static server and Netdata API bridge using Python's standard library

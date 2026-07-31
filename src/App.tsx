@@ -6,6 +6,7 @@ import { MetricDetail } from './components/metric-detail'
 import { useSettings } from './hooks/use-settings'
 import { buildDemoData } from './lib/demo-data'
 import { fetchDashboard } from './lib/netdata-client'
+import type { TimeRangeSeconds } from './lib/time-ranges'
 import type { MetricSeries, ViewName } from './lib/types'
 import { AlertsPage } from './pages/alerts'
 import { MetricsPage } from './pages/metrics'
@@ -25,24 +26,27 @@ function DashboardApp() {
   const { settings, setSettings } = useSettings()
   const cache = useQueryClient()
   const [view, setView] = useState<ViewName>('overview')
-  const [selectedMetric, setSelectedMetric] = useState<MetricSeries | null>(null)
+  const [selectedMetricId, setSelectedMetricId] = useState<string | null>(null)
+  const [rangeSeconds, setRangeSeconds] = useState<TimeRangeSeconds>(1800)
   const dashboardQuery = useQuery({
-    queryKey: ['dashboard', settings.mode, settings.apiBase],
-    queryFn: ({ signal }) => fetchDashboard(settings, 1800, signal),
+    queryKey: ['dashboard', settings.mode, settings.apiBase, rangeSeconds],
+    queryFn: ({ signal }) => fetchDashboard(settings, rangeSeconds, signal),
+    placeholderData: (previous) => previous,
     refetchInterval: settings.refreshSeconds * 1000
   })
-  const data = dashboardQuery.data ?? buildDemoData()
+  const data = dashboardQuery.data ?? buildDemoData(rangeSeconds)
+  const selectedMetric = selectedMetricId ? data.series[selectedMetricId] : null
 
   useEffect(() => {
     const handleKey = (event: KeyboardEvent) => {
-      if (event.key === 'Escape') setSelectedMetric(null)
+      if (event.key === 'Escape') setSelectedMetricId(null)
     }
     window.addEventListener('keydown', handleKey)
     return () => window.removeEventListener('keydown', handleKey)
   }, [])
 
   const criticalCount = data.alerts.filter((alert) => alert.status === 'WARNING' || alert.status === 'CRITICAL').length
-  const openMetric = (series: MetricSeries) => setSelectedMetric(series)
+  const openMetric = (series: MetricSeries) => setSelectedMetricId(series.definition.id)
 
   return <>
     <AppShell view={view} setView={setView} hostname={data.node.hostname} online={settings.mode === 'demo' || dashboardQuery.isSuccess} alertCount={criticalCount}>
@@ -54,6 +58,6 @@ function DashboardApp() {
       {view === 'alerts' && <AlertsPage data={data}/>} 
       {view === 'settings' && <SettingsPage settings={settings} saveSettings={setSettings} node={data.node} onRefresh={() => cache.invalidateQueries({ queryKey: ['dashboard'] })}/>} 
     </AppShell>
-    {selectedMetric && <MetricDetail series={selectedMetric} close={() => setSelectedMetric(null)}/>} 
+    {selectedMetric && <MetricDetail series={selectedMetric} rangeSeconds={rangeSeconds} setRangeSeconds={setRangeSeconds} refreshing={dashboardQuery.isFetching} close={() => setSelectedMetricId(null)}/>}
   </>
 }

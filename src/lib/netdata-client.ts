@@ -1,4 +1,5 @@
 import { buildDemoData } from './demo-data'
+import { pointsForRange } from './time-ranges'
 import type { AppSettings, DashboardData, MetricDefinition, MetricSeries, NetdataAlert, RawChartsResponse, RawDataResponse, ZfsInventory } from './types'
 
 const preferredCharts = ['system.cpu', 'system.ram', 'system.load', 'system.io', 'net.', 'system.processes', 'system.uptime', 'sensors.', 'apps.cpu']
@@ -62,23 +63,35 @@ async function fetchZfsInventory(settings: AppSettings, signal?: AbortSignal): P
 export function parseMetricSeries(definition: MetricDefinition, raw: RawDataResponse): MetricSeries {
   const labels = raw.labels ?? []
   const dimensionLabels = labels.slice(1)
-  const points = (raw.data ?? []).flatMap((row) => dimensionLabels.map((series, index) => ({
+  const rows = [...(raw.data ?? [])].sort((a, b) => Number(a[0] ?? 0) - Number(b[0] ?? 0))
+  const points = rows.flatMap((row) => dimensionLabels.map((series, index) => ({
     time: new Date((row[0] ?? 0) * 1000),
     value: Number(row[index + 1] ?? 0),
     series
-  }))).sort((a, b) => a.time.getTime() - b.time.getTime())
-  const primaryName = dimensionLabels[0]
-  const primary = points.filter((point) => point.series === primaryName).map((point) => point.value)
-  const latest = primary.at(-1) ?? 0
-  const previous = primary.at(-6) ?? latest
+  })))
+  const values = summaryValues(definition, dimensionLabels, rows)
+  const latest = values.at(-1) ?? 0
+  const previous = values.at(-6) ?? latest
   return {
     definition: { ...definition, dimensions: dimensionLabels.length ? dimensionLabels : definition.dimensions },
     points,
     latest,
-    change: previous === 0 ? 0 : ((latest - previous) / Math.abs(previous)) * 100,
-    min: raw.min ?? (primary.length ? Math.min(...primary) : 0),
-    max: raw.max ?? (primary.length ? Math.max(...primary) : 0)
+    change: previous === 0 ? (latest === 0 ? 0 : 100) : ((latest - previous) / Math.abs(previous)) * 100,
+    min: values.length ? Math.min(...values) : 0,
+    max: values.length ? Math.max(...values) : 0
   }
+}
+
+function summaryValues(definition: MetricDefinition, dimensions: string[], rows: Array<Array<number | null>>) {
+  const normalized = dimensions.map((dimension) => dimension.toLowerCase())
+  if (definition.context === 'system.cpu' || definition.id === 'system.cpu') {
+    const indexes = normalized.map((dimension, index) => ({ dimension, index })).filter(({ dimension }) => dimension !== 'idle').map(({ index }) => index + 1)
+    return rows.map((row) => indexes.reduce((total, index) => total + Number(row[index] ?? 0), 0))
+  }
+  const preferredDimension = definition.context === 'system.ram' || definition.context === 'disk.space' || definition.context === 'zfspool.pool_space_usage' ? 'used' : null
+  const preferredIndex = preferredDimension ? normalized.indexOf(preferredDimension) : -1
+  const valueIndex = (preferredIndex >= 0 ? preferredIndex : 0) + 1
+  return rows.map((row) => Number(row[valueIndex] ?? 0))
 }
 
 function parseAlerts(raw: unknown): NetdataAlert[] {
@@ -108,7 +121,7 @@ export async function fetchDashboard(settings: AppSettings, rangeSeconds = 1800,
   const allDefinitions = parseDefinitions(chartResponse)
   const definitions = pickImportant(allDefinitions, zfs)
   const results = await Promise.all(definitions.map(async (definition) => {
-    const query = new URLSearchParams({ chart: definition.id, after: String(-rangeSeconds), points: '60', group: 'average', format: 'json' })
+    const query = new URLSearchParams({ chart: definition.id, after: String(-rangeSeconds), points: String(pointsForRange(rangeSeconds)), group: 'average', format: 'json' })
     try {
       const raw = await getJson<RawDataResponse>(settings.apiBase, `/api/v1/data?${query.toString()}`, signal)
       return parseMetricSeries(definition, raw)

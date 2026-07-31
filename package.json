@@ -8,6 +8,7 @@
     "build": "tsc -b && vite build",
     "check": "biome check",
     "check:fix": "biome check --write --unsafe",
+    "lint": "tsc -b --pretty false",
     "preview": "vite preview --host 0.0.0.0",
     "test": "vitest run src",
     "test:server": "python3 -m unittest server/test_netdata_mobile_server.py",

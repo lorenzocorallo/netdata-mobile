@@ -49,12 +49,13 @@ export const demoZfs: ZfsInventory = {
     { name: 'fast', size: 1.82 * tib, allocated: 1.12 * tib, free: 0.7 * tib, fragmentation: 4, capacity: 61.5, health: 'ONLINE' }
   ],
   datasets: [
-    { name: 'pool12', pool: 'pool12', parent: null, depth: 0, type: 'filesystem', mountpoint: '/pool12', used: 7.35 * tib, available: 4.65 * tib, referenced: 256 * 1024, quota: null, usedBySnapshots: 110 * gib, usedByDataset: 256 * 1024, usedByChildren: 7.24 * tib },
-    { name: 'pool12/media', pool: 'pool12', parent: 'pool12', depth: 1, type: 'filesystem', mountpoint: '/pool12/media', used: 684 * gib, available: 340 * gib, referenced: 660 * gib, quota: 1 * tib, usedBySnapshots: 24 * gib, usedByDataset: 660 * gib, usedByChildren: 0 },
-    { name: 'pool12/backups', pool: 'pool12', parent: 'pool12', depth: 1, type: 'filesystem', mountpoint: '/pool12/backups', used: 3.42 * tib, available: 676 * gib, referenced: 3.1 * tib, quota: 4 * tib, usedBySnapshots: 328 * gib, usedByDataset: 3.1 * tib, usedByChildren: 0 },
-    { name: 'pool12/vmdata', pool: 'pool12', parent: 'pool12', depth: 1, type: 'filesystem', mountpoint: '/pool12/vmdata', used: 2.95 * tib, available: 1.05 * tib, referenced: 2.8 * tib, quota: 4 * tib, usedBySnapshots: 154 * gib, usedByDataset: 2.8 * tib, usedByChildren: 0 },
-    { name: 'fast', pool: 'fast', parent: null, depth: 0, type: 'filesystem', mountpoint: '/fast', used: 1.12 * tib, available: 0.7 * tib, referenced: 128 * 1024, quota: null, usedBySnapshots: 0, usedByDataset: 128 * 1024, usedByChildren: 1.12 * tib },
-    { name: 'fast/containers', pool: 'fast', parent: 'fast', depth: 1, type: 'filesystem', mountpoint: '/fast/containers', used: 1.12 * tib, available: 0.7 * tib, referenced: 1.09 * tib, quota: null, usedBySnapshots: 31 * gib, usedByDataset: 1.09 * tib, usedByChildren: 0 }
+    { name: 'pool12', pool: 'pool12', parent: null, depth: 0, type: 'filesystem', mountpoint: '/pool12', used: 7.35 * tib, available: 4.65 * tib, referenced: 256 * 1024, quota: null, refQuota: null, volumeSize: null, usedBySnapshots: 110 * gib, usedByDataset: 256 * 1024, usedByChildren: 7.24 * tib },
+    { name: 'pool12/media', pool: 'pool12', parent: 'pool12', depth: 1, type: 'filesystem', mountpoint: '/pool12/media', used: 684 * gib, available: 340 * gib, referenced: 660 * gib, quota: null, refQuota: 1 * tib, volumeSize: null, usedBySnapshots: 24 * gib, usedByDataset: 660 * gib, usedByChildren: 0 },
+    { name: 'pool12/backups', pool: 'pool12', parent: 'pool12', depth: 1, type: 'filesystem', mountpoint: '/pool12/backups', used: 3.42 * tib, available: 676 * gib, referenced: 3.1 * tib, quota: 4 * tib, refQuota: null, volumeSize: null, usedBySnapshots: 328 * gib, usedByDataset: 3.1 * tib, usedByChildren: 0 },
+    { name: 'pool12/vmdata', pool: 'pool12', parent: 'pool12', depth: 1, type: 'filesystem', mountpoint: '/pool12/vmdata', used: 2.95 * tib, available: 1.05 * tib, referenced: 2.8 * tib, quota: 20 * tib, refQuota: null, volumeSize: null, usedBySnapshots: 154 * gib, usedByDataset: 2.8 * tib, usedByChildren: 0 },
+    { name: 'fast', pool: 'fast', parent: null, depth: 0, type: 'filesystem', mountpoint: '/fast', used: 1.12 * tib, available: 0.7 * tib, referenced: 128 * 1024, quota: null, refQuota: null, volumeSize: null, usedBySnapshots: 0, usedByDataset: 128 * 1024, usedByChildren: 1.12 * tib },
+    { name: 'fast/containers', pool: 'fast', parent: 'fast', depth: 1, type: 'filesystem', mountpoint: '/fast/containers', used: 1.12 * tib, available: 0.7 * tib, referenced: 1.09 * tib, quota: null, refQuota: null, volumeSize: null, usedBySnapshots: 31 * gib, usedByDataset: 1.09 * tib, usedByChildren: 0 },
+    { name: 'fast/vm-200-disk-0', pool: 'fast', parent: 'fast', depth: 1, type: 'volume', mountpoint: '-', used: 22 * gib, available: 694 * gib, referenced: 22 * gib, quota: null, refQuota: null, volumeSize: 32 * gib, usedBySnapshots: 0, usedByDataset: 22 * gib, usedByChildren: 0 }
   ]
 }
 
@@ -75,7 +76,9 @@ export function buildDemoSeries(definition: MetricDefinition, rangeSeconds = 180
     })
   )
   const primary = series.filter((point) => point.series === definition.dimensions[0])
-  const values = primary.map((point) => point.value)
+  const values = definition.context === 'system.cpu'
+    ? Array.from({ length: points }, (_, index) => series.filter((_, pointIndex) => pointIndex % points === index).reduce((total, point) => total + point.value, 0))
+    : primary.map((point) => point.value)
   const latest = values.at(-1) ?? 0
   const previous = values.at(-6) ?? latest
   const rawChange = previous === 0 ? 0 : ((latest - previous) / Math.max(Math.abs(previous), profile.base * 0.25)) * 100

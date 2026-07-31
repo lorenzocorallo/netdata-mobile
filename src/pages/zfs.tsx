@@ -8,7 +8,7 @@ export function ZfsPage({ data, openMetric }: { data: DashboardData; openMetric:
   const mountpoints = new Set(data.zfs.datasets.map((dataset) => dataset.mountpoint))
   const zfsMetrics = Object.values(data.series).filter((series) => series.definition.context.startsWith('zfs.') || series.definition.context.startsWith('zfspool.') || (series.definition.context === 'disk.space' && mountpoints.has(series.definition.family)))
   const free = zfs.pools.reduce((sum, pool) => sum + pool.free, 0)
-  const datasetCount = zfs.datasets.filter((dataset) => dataset.type === 'filesystem').length
+  const datasetCount = zfs.datasets.length
 
   return <div className="space-y-4">
     <PageTitle title="ZFS storage" detail={`${data.node.hostname} · live inventory`} />
@@ -30,7 +30,7 @@ export function ZfsPage({ data, openMetric }: { data: DashboardData; openMetric:
       <Card className="divide-y divide-line overflow-hidden">{zfsMetrics.map((series) => <button type="button" key={series.definition.id} onClick={() => openMetric(series)} className="grid w-full grid-cols-[minmax(0,1fr)_auto] items-center gap-2 px-3 py-2.5 text-left hover:bg-accent/[0.035]"><span className="flex min-w-0 items-center gap-2"><Activity size={14} className="shrink-0 text-accent"/><span className="min-w-0"><span className="block truncate text-xs font-semibold">{series.definition.title}</span><span className="block truncate text-[10px] text-muted-foreground">{series.definition.context}</span></span></span><span className="text-[10px] text-muted-foreground">Open</span></button>)}</Card>
     </section>}
 
-    {zfs.available && <p className="text-[10px] leading-relaxed text-muted-foreground">Pool totals are physical aggregate capacity. Dataset values include each dataset’s effective quota and available space; parent usage includes its descendants.</p>}
+    {zfs.available && <p className="text-[10px] leading-relaxed text-muted-foreground">Pool totals are physical capacity. Filesystem free space respects the tightest pool, parent, quota, or refquota limit. For zvols, ZFS exposes physical used space, pool availability, and volsize—not free space inside the guest filesystem.</p>}
   </div>
 }
 
@@ -58,14 +58,35 @@ function PoolCard({ pool, datasets }: { pool: ZfsPool; datasets: ZfsDataset[] })
 }
 
 function DatasetRow({ dataset }: { dataset: ZfsDataset }) {
-  const effectiveSize = dataset.quota && dataset.quota > 0 ? dataset.quota : dataset.used + dataset.available
-  const percent = effectiveSize > 0 ? clamp((dataset.used / effectiveSize) * 100) : 0
+  const accessibleSize = dataset.used + dataset.available
+  const percent = accessibleSize > 0 ? clamp((dataset.used / accessibleSize) * 100) : 0
   const isRoot = dataset.depth === 0
+  const limit = getDatasetLimit(dataset)
+  const quotaUsage = limit.kind === 'refquota' ? dataset.referenced : dataset.used
+  const quotaReach = quotaUsage + dataset.available
+  const overcommitted = limit.value !== null && dataset.type !== 'volume' && quotaReach > 0 && limit.value > quotaReach * 1.05
+  const badge = isRoot ? 'Aggregate' : overcommitted ? 'High quota' : limit.kind === 'unlimited' ? 'Unlimited' : limit.kind === 'volsize' ? 'Zvol' : 'Limited'
   return <div className="border-b border-line px-3 py-2.5 last:border-b-0">
-    <div className="grid grid-cols-[minmax(0,1fr)_auto] items-center gap-2">
-      <div className="min-w-0" style={{ paddingLeft: `${Math.min(dataset.depth, 3) * 10}px` }}><div className="flex min-w-0 items-center gap-1.5">{isRoot ? <Gauge size={12} className="shrink-0 text-accent"/> : <i className="size-1 shrink-0 rounded-full bg-[#365942]"/>}<p className="truncate text-[11px] font-semibold" title={dataset.name}>{dataset.name}</p>{isRoot && <span className="shrink-0 text-[8px] uppercase tracking-wider text-muted-foreground">aggregate</span>}</div><p className="mt-0.5 truncate text-[9px] text-muted-foreground" title={dataset.mountpoint}>{dataset.mountpoint === '-' ? dataset.type : dataset.mountpoint}{dataset.quota ? ` · ${formatBytes(dataset.quota)} quota` : ''}</p></div>
-      <div className="text-right"><p className="text-[11px] font-bold">{formatBytes(dataset.available)}</p><p className="text-[8px] text-muted-foreground">free</p></div>
+    <div className="min-w-0" style={{ paddingLeft: `${Math.min(dataset.depth, 3) * 10}px` }}>
+      <div className="flex min-w-0 items-center gap-1.5">{isRoot ? <Gauge size={12} className="shrink-0 text-accent"/> : <i className="size-1 shrink-0 rounded-full bg-[#365942]"/>}<p className="min-w-0 flex-1 truncate text-[11px] font-semibold" title={dataset.name}>{dataset.name}</p><Badge tone={overcommitted ? 'warning' : limit.kind === 'unlimited' ? 'neutral' : 'success'} className="shrink-0 px-1.5 py-px text-[7px]">{badge}</Badge></div>
+      <p className="mt-0.5 truncate text-[9px] text-muted-foreground" title={dataset.mountpoint}>{dataset.mountpoint === '-' ? 'block volume' : dataset.mountpoint}</p>
+      <dl className="mt-2 grid grid-cols-3 gap-1.5">
+        <DatasetValue label="Used" value={formatBytes(dataset.used)} />
+        <DatasetValue label={dataset.type === 'volume' ? 'Pool free' : 'Free'} value={formatBytes(dataset.available)} />
+        <DatasetValue label={limit.label} value={limit.value === null ? 'Unlimited' : formatBytes(limit.value)} highlight={overcommitted} />
+      </dl>
     </div>
     <div className="mt-1.5 ml-auto h-0.5 overflow-hidden rounded-full bg-white/[0.05]" style={{ width: `calc(100% - ${Math.min(dataset.depth, 3) * 10}px)` }}><div className="h-full bg-[#477a57]" style={{ width: `${percent}%` }}/></div>
   </div>
+}
+
+function DatasetValue({ label, value, highlight = false }: { label: string; value: string; highlight?: boolean }) {
+  return <div className="min-w-0"><dt className="text-[7px] uppercase tracking-wider text-muted-foreground">{label}</dt><dd className={`truncate text-[9px] font-semibold ${highlight ? 'text-warning' : 'text-foreground'}`} title={value}>{value}</dd></div>
+}
+
+function getDatasetLimit(dataset: ZfsDataset) {
+  if (dataset.type === 'volume' && dataset.volumeSize) return { kind: 'volsize', label: 'Volsize', value: dataset.volumeSize } as const
+  if (dataset.refQuota) return { kind: 'refquota', label: 'Refquota', value: dataset.refQuota } as const
+  if (dataset.quota) return { kind: 'quota', label: 'Quota', value: dataset.quota } as const
+  return { kind: 'unlimited', label: 'Quota', value: null } as const
 }

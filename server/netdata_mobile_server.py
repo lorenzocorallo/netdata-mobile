@@ -175,9 +175,9 @@ def parse_zfs_list(output: str) -> list[dict[str, object]]:
     datasets: list[dict[str, object]] = []
     for line in output.splitlines():
         fields = line.split("\t")
-        if len(fields) != 11:
+        if len(fields) != 13:
             continue
-        name, kind, mountpoint, used, available, referenced, quota, snapshots, dataset, children, _refreservation = fields
+        name, kind, mountpoint, used, available, referenced, quota, refquota, volsize, snapshots, dataset, children, _refreservation = fields
         parent = name.rsplit("/", 1)[0] if "/" in name else None
         datasets.append({
             "name": name,
@@ -190,6 +190,8 @@ def parse_zfs_list(output: str) -> list[dict[str, object]]:
             "available": _number(available),
             "referenced": _number(referenced),
             "quota": None if quota in {"-", "none", "0"} else _number(quota),
+            "refQuota": None if refquota in {"-", "none", "0"} else _number(refquota),
+            "volumeSize": None if volsize in {"-", "none", "0"} else _number(volsize),
             "usedBySnapshots": _number(snapshots),
             "usedByDataset": _number(dataset),
             "usedByChildren": _number(children),
@@ -212,7 +214,7 @@ def collect_zfs_inventory() -> dict[str, object]:
         pools = parse_zpool_list(_run_zfs([zpool, "list", "-Hp", "-o", "name,size,alloc,free,frag,cap,health"]))
         datasets = parse_zfs_list(_run_zfs([
             zfs, "list", "-Hp", "-t", "filesystem,volume", "-o",
-            "name,type,mountpoint,used,available,referenced,quota,usedbysnapshots,usedbydataset,usedbychildren,usedbyrefreservation",
+            "name,type,mountpoint,used,available,referenced,quota,refquota,volsize,usedbysnapshots,usedbydataset,usedbychildren,usedbyrefreservation",
         ]))
         return {"available": True, "source": "local-zfs", "pools": pools, "datasets": datasets}
     except (OSError, subprocess.SubprocessError) as error:

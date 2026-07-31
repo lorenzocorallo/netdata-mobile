@@ -84,6 +84,8 @@ export interface ZfsDataset {
   available: number
   referenced: number
   quota: number | null
+  refQuota: number | null
+  volumeSize: number | null
   usedBySnapshots: number
   usedByDataset: number
   usedByChildren: number

@@ -67,14 +67,17 @@ class ServerTest(unittest.TestCase):
     def test_parses_zfs_pool_and_dataset_hierarchy(self) -> None:
         pools = app.parse_zpool_list("pool12\t13194139533312\t7696581394432\t5497558138880\t11\t58\tONLINE\n")
         datasets = app.parse_zfs_list(
-            "pool12\tfilesystem\t/pool12\t7696581394432\t5497558138880\t262144\t0\t118111600640\t262144\t7578469531648\t0\n"
-            "pool12/media\tfilesystem\t/pool12/media\t734439407616\t365072220160\t708669603840\t1099511627776\t25769803776\t708669603840\t0\t0\n"
+            "pool12\tfilesystem\t/pool12\t7696581394432\t5497558138880\t262144\t0\t0\t-\t118111600640\t262144\t7578469531648\t0\n"
+            "pool12/media\tfilesystem\t/pool12/media\t734439407616\t365072220160\t708669603840\t0\t1099511627776\t-\t25769803776\t708669603840\t0\t0\n"
+            "pool12/vm-200-disk-0\tvolume\t-\t21474836480\t1082331758592\t21474836480\t0\t0\t34359738368\t0\t21474836480\t0\t34359738368\n"
         )
         self.assertEqual(pools[0]["name"], "pool12")
         self.assertEqual(pools[0]["health"], "ONLINE")
         self.assertEqual(datasets[1]["parent"], "pool12")
         self.assertEqual(datasets[1]["depth"], 1)
-        self.assertEqual(datasets[1]["quota"], 1099511627776)
+        self.assertIsNone(datasets[1]["quota"])
+        self.assertEqual(datasets[1]["refQuota"], 1099511627776)
+        self.assertEqual(datasets[2]["volumeSize"], 34359738368)
 
 
 if __name__ == "__main__":
