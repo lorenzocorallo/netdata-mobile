@@ -1,0 +1,69 @@
+from __future__ import annotations
+
+import json
+import tempfile
+import threading
+import unittest
+import urllib.request
+from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
+from pathlib import Path
+
+from server import netdata_mobile_server as app
+
+
+class FakeNetdataHandler(BaseHTTPRequestHandler):
+    def do_GET(self) -> None:  # noqa: N802
+        body = json.dumps({"path": self.path, "hostname": "test-node"}).encode()
+        self.send_response(200)
+        self.send_header("Content-Type", "application/json")
+        self.send_header("Content-Length", str(len(body)))
+        self.end_headers()
+        self.wfile.write(body)
+
+    def log_message(self, _format: str, *_args: object) -> None:
+        return
+
+
+class ServerTest(unittest.TestCase):
+    def setUp(self) -> None:
+        self.temp = tempfile.TemporaryDirectory()
+        root = Path(self.temp.name)
+        (root / "index.html").write_text("<h1>Netdata Mobile</h1>", encoding="utf-8")
+        app.WEB_ROOT = root
+
+        self.agent = ThreadingHTTPServer(("127.0.0.1", 0), FakeNetdataHandler)
+        app.NETDATA_HOST = "127.0.0.1"
+        app.NETDATA_PORT = self.agent.server_port
+        self.agent_thread = threading.Thread(target=self.agent.serve_forever, daemon=True)
+        self.agent_thread.start()
+
+        self.web = ThreadingHTTPServer(("127.0.0.1", 0), app.NetdataMobileHandler)
+        self.web_thread = threading.Thread(target=self.web.serve_forever, daemon=True)
+        self.web_thread.start()
+        self.base = f"http://127.0.0.1:{self.web.server_port}"
+
+    def tearDown(self) -> None:
+        self.web.shutdown()
+        self.agent.shutdown()
+        self.web.server_close()
+        self.agent.server_close()
+        self.temp.cleanup()
+
+    def test_serves_spa_fallback(self) -> None:
+        with urllib.request.urlopen(f"{self.base}/metrics") as response:
+            self.assertEqual(response.status, 200)
+            self.assertIn(b"Netdata Mobile", response.read())
+
+    def test_proxies_netdata_api_with_query(self) -> None:
+        with urllib.request.urlopen(f"{self.base}/netdata/api/v1/info?all=true") as response:
+            payload = json.load(response)
+            self.assertEqual(payload["hostname"], "test-node")
+            self.assertEqual(payload["path"], "/api/v1/info?all=true")
+
+    def test_health_endpoint(self) -> None:
+        with urllib.request.urlopen(f"{self.base}/_health") as response:
+            self.assertEqual(json.load(response), {"status": "ok"})
+
+
+if __name__ == "__main__":
+    unittest.main()
