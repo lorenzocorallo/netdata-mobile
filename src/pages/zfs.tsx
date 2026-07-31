@@ -30,7 +30,7 @@ export function ZfsPage({ data, openMetric }: { data: DashboardData; openMetric:
       <Card className="divide-y divide-line overflow-hidden">{zfsMetrics.map((series) => <button type="button" key={series.definition.id} onClick={() => openMetric(series)} className="grid w-full grid-cols-[minmax(0,1fr)_auto] items-center gap-2 px-3 py-2.5 text-left hover:bg-accent/[0.035]"><span className="flex min-w-0 items-center gap-2"><Activity size={14} className="shrink-0 text-accent"/><span className="min-w-0"><span className="block truncate text-xs font-semibold">{series.definition.title}</span><span className="block truncate text-[10px] text-muted-foreground">{series.definition.context}</span></span></span><span className="text-[10px] text-muted-foreground">Open</span></button>)}</Card>
     </section>}
 
-    {zfs.available && <p className="text-[10px] leading-relaxed text-muted-foreground">Pool totals are physical capacity. Filesystem free space respects the tightest pool, parent, quota, or refquota limit. For zvols, ZFS exposes physical used space, pool availability, and volsize—not free space inside the guest filesystem.</p>}
+    {zfs.available && <p className="text-[10px] leading-relaxed text-muted-foreground">Pool headers show physical free capacity. Filesystem rows show host-visible used, free, and quota limits. Zvol rows intentionally omit “free”: only the guest filesystem knows that value; ZFS can report its allocated and logical blocks, disk size, reservations, and snapshots.</p>}
   </div>
 }
 
@@ -58,6 +58,8 @@ function PoolCard({ pool, datasets }: { pool: ZfsPool; datasets: ZfsDataset[] })
 }
 
 function DatasetRow({ dataset }: { dataset: ZfsDataset }) {
+  if (dataset.type === 'volume') return <VolumeRow dataset={dataset} />
+
   const accessibleSize = dataset.used + dataset.available
   const percent = accessibleSize > 0 ? clamp((dataset.used / accessibleSize) * 100) : 0
   const isRoot = dataset.depth === 0
@@ -65,16 +67,41 @@ function DatasetRow({ dataset }: { dataset: ZfsDataset }) {
   const quotaUsage = limit.kind === 'refquota' ? dataset.referenced : dataset.used
   const quotaReach = quotaUsage + dataset.available
   const overcommitted = limit.value !== null && dataset.type !== 'volume' && quotaReach > 0 && limit.value > quotaReach * 1.05
-  const badge = isRoot ? 'Aggregate' : overcommitted ? 'High quota' : limit.kind === 'unlimited' ? 'Unlimited' : limit.kind === 'volsize' ? 'Zvol' : 'Limited'
+  const badge = isRoot ? 'Aggregate' : overcommitted ? 'High quota' : limit.kind === 'unlimited' ? 'Unlimited' : 'Limited'
   return <div className="border-b border-line px-3 py-2.5 last:border-b-0">
     <div className="min-w-0" style={{ paddingLeft: `${Math.min(dataset.depth, 3) * 10}px` }}>
       <div className="flex min-w-0 items-center gap-1.5">{isRoot ? <Gauge size={12} className="shrink-0 text-accent"/> : <i className="size-1 shrink-0 rounded-full bg-[#365942]"/>}<p className="min-w-0 flex-1 truncate text-[11px] font-semibold" title={dataset.name}>{dataset.name}</p><Badge tone={overcommitted ? 'warning' : limit.kind === 'unlimited' ? 'neutral' : 'success'} className="shrink-0 px-1.5 py-px text-[7px]">{badge}</Badge></div>
       <p className="mt-0.5 truncate text-[9px] text-muted-foreground" title={dataset.mountpoint}>{dataset.mountpoint === '-' ? 'block volume' : dataset.mountpoint}</p>
       <dl className="mt-2 grid grid-cols-3 gap-1.5">
         <DatasetValue label="Used" value={formatBytes(dataset.used)} />
-        <DatasetValue label={dataset.type === 'volume' ? 'Pool free' : 'Free'} value={formatBytes(dataset.available)} />
+        <DatasetValue label="Free" value={formatBytes(dataset.available)} />
         <DatasetValue label={limit.label} value={limit.value === null ? 'Unlimited' : formatBytes(limit.value)} highlight={overcommitted} />
       </dl>
+    </div>
+    <div className="mt-1.5 ml-auto h-0.5 overflow-hidden rounded-full bg-white/[0.05]" style={{ width: `calc(100% - ${Math.min(dataset.depth, 3) * 10}px)` }}><div className="h-full bg-[#477a57]" style={{ width: `${percent}%` }}/></div>
+  </div>
+}
+
+function VolumeRow({ dataset }: { dataset: ZfsDataset }) {
+  const size = dataset.volumeSize ?? 0
+  const allocated = dataset.usedByDataset
+  const logical = dataset.logicalReferenced ?? dataset.referenced
+  const reservation = dataset.refReservation
+  const automaticReservation = dataset.refReservationAuto === true
+  const snapshots = dataset.usedBySnapshots
+  const mode = automaticReservation ? 'thick' : reservation === undefined ? 'unknown' : !reservation ? 'thin' : reservation >= size ? 'thick' : 'partial'
+  const percent = size > 0 ? clamp((allocated / size) * 100) : 0
+  const modeLabel = mode === 'unknown' ? 'Zvol' : mode === 'partial' ? 'Partial reserve' : mode
+  return <div className="border-b border-line px-3 py-2.5 last:border-b-0">
+    <div className="min-w-0" style={{ paddingLeft: `${Math.min(dataset.depth, 3) * 10}px` }}>
+      <div className="flex min-w-0 items-center gap-1.5"><i className="size-1 shrink-0 rounded-full bg-[#365942]"/><p className="min-w-0 flex-1 truncate text-[11px] font-semibold" title={dataset.name}>{dataset.name}</p><Badge tone={mode === 'thick' ? 'success' : mode === 'unknown' ? 'neutral' : 'warning'} className="shrink-0 px-1.5 py-px text-[7px]">{modeLabel}</Badge></div>
+      <p className="mt-0.5 truncate text-[9px] text-muted-foreground">VM block volume · guest free space unavailable</p>
+      <dl className="mt-2 grid grid-cols-3 gap-1.5">
+        <DatasetValue label="ZFS allocated" value={formatBytes(allocated)} />
+        <DatasetValue label="Logical blocks" value={formatBytes(logical)} />
+        <DatasetValue label="Disk size" value={formatBytes(size)} />
+      </dl>
+      <p className="mt-1.5 truncate text-[8px] text-muted-foreground" title={`${automaticReservation ? 'Automatic reservation' : reservation ? `${formatBytes(reservation)} reserved` : 'No reservation'} · ${snapshots ? `${formatBytes(snapshots)} snapshots` : 'no snapshots'}`}>{automaticReservation ? 'Automatic reservation' : reservation ? `${formatBytes(reservation)} reserved` : 'No reservation'} · {snapshots ? `${formatBytes(snapshots)} snapshots` : 'no snapshots'}</p>
     </div>
     <div className="mt-1.5 ml-auto h-0.5 overflow-hidden rounded-full bg-white/[0.05]" style={{ width: `calc(100% - ${Math.min(dataset.depth, 3) * 10}px)` }}><div className="h-full bg-[#477a57]" style={{ width: `${percent}%` }}/></div>
   </div>
@@ -85,7 +112,6 @@ function DatasetValue({ label, value, highlight = false }: { label: string; valu
 }
 
 function getDatasetLimit(dataset: ZfsDataset) {
-  if (dataset.type === 'volume' && dataset.volumeSize) return { kind: 'volsize', label: 'Volsize', value: dataset.volumeSize } as const
   if (dataset.refQuota) return { kind: 'refquota', label: 'Refquota', value: dataset.refQuota } as const
   if (dataset.quota) return { kind: 'quota', label: 'Quota', value: dataset.quota } as const
   return { kind: 'unlimited', label: 'Quota', value: null } as const

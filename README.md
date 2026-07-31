@@ -22,6 +22,7 @@ See [PROXMOX_DEPLOYMENT.md](./PROXMOX_DEPLOYMENT.md) for service commands, firew
 - Active and historical Netdata alerts
 - ZFS pool aggregates, health, capacity, fragmentation, and full dataset hierarchy
 - Per-dataset used/free space with quota, refquota, unlimited, high-quota, and zvol-size distinctions
+- Honest zvol accounting: physical allocation, logical blocks, disk size, snapshots, reservation, and thin/thick provisioning
 - Configurable refresh interval and API endpoint
 - PWA manifest, offline application shell, and responsive phone navigation
 - Built-in static server and Netdata API bridge using Python's standard library

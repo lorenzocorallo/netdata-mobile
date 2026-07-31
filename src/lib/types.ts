@@ -86,9 +86,14 @@ export interface ZfsDataset {
   quota: number | null
   refQuota: number | null
   volumeSize: number | null
+  refReservation?: number | null
+  refReservationAuto?: boolean
+  logicalUsed?: number
+  logicalReferenced?: number
   usedBySnapshots: number
   usedByDataset: number
   usedByChildren: number
+  usedByRefReservation?: number
 }
 
 export interface ZfsInventory {
