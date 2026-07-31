@@ -8,7 +8,7 @@ Phone ── WireGuard/LAN ──> Proxmox:19998 (Netdata Mobile)
                                       └──> 127.0.0.1:19999 (Netdata API)
 ```
 
-The bundled server provides the static PWA and forwards `/netdata/` requests to the local agent. Nginx, Caddy, Node.js, and manual proxy configuration are not required.
+The bundled server provides the static PWA and forwards `/netdata/` requests to the local agent. Nginx, Caddy, and manual proxy configuration are not required. Node.js and npm are needed only while installing or updating, because the installer builds the UI from source; they are not needed to run the service afterward.
 
 ## One-line installation
 
@@ -18,10 +18,13 @@ Run this as a user with sudo access on the Proxmox host:
 curl -fsSL https://raw.githubusercontent.com/lorenzocorallo/netdata-mobile/main/install.sh | sudo bash
 ```
 
+Before running it, make sure the host already has Git, Node.js 24+, npm, Python 3, and systemd. The installer does not install missing system packages.
+
 The installer:
 
 - verifies that Netdata responds on `127.0.0.1:19999`;
-- downloads the current production build from GitHub;
+- clones the current source from GitHub;
+- runs `npm ci` and `npm run build` locally;
 - installs it under `/opt/netdata-mobile`;
 - installs and enables `netdata-mobile.service`;
 - listens on `0.0.0.0:19998`;

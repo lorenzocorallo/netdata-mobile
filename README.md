@@ -29,7 +29,7 @@ See [PROXMOX_DEPLOYMENT.md](./PROXMOX_DEPLOYMENT.md) for service commands, firew
 
 ## Development
 
-Requires Node.js 24+ and npm.
+Requires Node.js 24+ and npm for development and installation builds.
 
 ```bash
 npm ci
@@ -48,4 +48,4 @@ npm run test:e2e
 npm run build
 ```
 
-The committed `dist/` directory is the production build consumed by the one-line installer.
+The one-line installer clones the current source, runs `npm ci` and `npm run build`, and installs the resulting web UI. It does not install Node.js, npm, or Python for you; those tools must already be available on the host.
