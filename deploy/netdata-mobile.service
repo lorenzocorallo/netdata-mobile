@@ -13,7 +13,6 @@ ExecStart=/usr/bin/python3 /opt/netdata-mobile/server.py
 Restart=on-failure
 RestartSec=3s
 NoNewPrivileges=yes
-PrivateDevices=yes
 PrivateTmp=yes
 ProtectControlGroups=yes
 ProtectHome=yes

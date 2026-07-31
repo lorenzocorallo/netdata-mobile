@@ -1,7 +1,8 @@
 import { buildDemoData } from './demo-data'
-import type { AppSettings, DashboardData, MetricDefinition, MetricSeries, NetdataAlert, RawChartsResponse, RawDataResponse } from './types'
+import type { AppSettings, DashboardData, MetricDefinition, MetricSeries, NetdataAlert, RawChartsResponse, RawDataResponse, ZfsInventory } from './types'
 
-const preferredCharts = ['system.cpu', 'system.ram', 'system.load', 'system.io', 'disk_space.', 'net.', 'system.processes', 'system.uptime', 'sensors.', 'apps.cpu', 'zfs.']
+const preferredCharts = ['system.cpu', 'system.ram', 'system.load', 'system.io', 'net.', 'system.processes', 'system.uptime', 'sensors.', 'apps.cpu']
+const emptyZfs: ZfsInventory = { available: false, source: 'unavailable', pools: [], datasets: [] }
 
 function normalizeBase(base: string) {
   return base.trim().replace(/\/+$/, '') || '/netdata'
@@ -25,17 +26,37 @@ function parseDefinitions(raw: RawChartsResponse): MetricDefinition[] {
   })).sort((a, b) => a.priority - b.priority || a.title.localeCompare(b.title))
 }
 
-function pickImportant(definitions: MetricDefinition[], count = 12) {
+function pickImportant(definitions: MetricDefinition[], zfs: ZfsInventory, count = 16) {
   const selected: MetricDefinition[] = []
   for (const prefix of preferredCharts) {
     const match = definitions.find((definition) => !selected.includes(definition) && (definition.id === prefix || definition.id.startsWith(prefix)))
     if (match) selected.push(match)
+  }
+  const poolNames = zfs.pools.map((pool) => pool.name.toLowerCase())
+  for (const definition of definitions) {
+    const context = definition.context.toLowerCase()
+    const family = definition.family.toLowerCase()
+    const isZfsMetric = context.startsWith('zfs.') || context.startsWith('zfspool.')
+    const isZfsMount = context === 'disk.space' && (poolNames.length === 0 || poolNames.some((pool) => family === `/${pool}` || family.startsWith(`/${pool}/`)))
+    if ((isZfsMetric || isZfsMount) && !selected.includes(definition)) selected.push(definition)
   }
   for (const definition of definitions) {
     if (selected.length >= count) break
     if (!selected.includes(definition)) selected.push(definition)
   }
   return selected
+}
+
+async function fetchZfsInventory(settings: AppSettings, signal?: AbortSignal): Promise<ZfsInventory> {
+  if (settings.mode === 'demo') return buildDemoData().zfs
+  if (!settings.apiBase.startsWith('/')) return { ...emptyZfs, error: 'ZFS inventory requires the bundled local service.' }
+  try {
+    const response = await fetch('/_zfs', { signal, headers: { Accept: 'application/json' } })
+    if (!response.ok) throw new Error(`Inventory returned ${response.status}`)
+    return await response.json() as ZfsInventory
+  } catch (error) {
+    return { ...emptyZfs, error: error instanceof Error ? error.message : 'ZFS inventory unavailable' }
+  }
 }
 
 export function parseMetricSeries(definition: MetricDefinition, raw: RawDataResponse): MetricSeries {
@@ -78,13 +99,14 @@ function parseAlerts(raw: unknown): NetdataAlert[] {
 export async function fetchDashboard(settings: AppSettings, rangeSeconds = 1800, signal?: AbortSignal): Promise<DashboardData> {
   if (settings.mode === 'demo') return buildDemoData(rangeSeconds)
 
-  const [info, chartResponse, alarms] = await Promise.all([
+  const [info, chartResponse, alarms, zfs] = await Promise.all([
     getJson<Record<string, unknown>>(settings.apiBase, '/api/v1/info', signal),
     getJson<RawChartsResponse>(settings.apiBase, '/api/v1/charts', signal),
-    getJson<unknown>(settings.apiBase, '/api/v1/alarms?all', signal)
+    getJson<unknown>(settings.apiBase, '/api/v1/alarms?all', signal),
+    fetchZfsInventory(settings, signal)
   ])
   const allDefinitions = parseDefinitions(chartResponse)
-  const definitions = pickImportant(allDefinitions)
+  const definitions = pickImportant(allDefinitions, zfs)
   const results = await Promise.all(definitions.map(async (definition) => {
     const query = new URLSearchParams({ chart: definition.id, after: String(-rangeSeconds), points: '60', group: 'average', format: 'json' })
     try {
@@ -107,6 +129,7 @@ export async function fetchDashboard(settings: AppSettings, rangeSeconds = 1800,
     metrics: allDefinitions,
     series: Object.fromEntries(fetchedSeries.map((series) => [series.definition.id, series])),
     alerts: parseAlerts(alarms),
+    zfs,
     connectedAt: Date.now()
   }
 }

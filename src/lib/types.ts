@@ -1,5 +1,5 @@
 export type ConnectionMode = 'demo' | 'live'
-export type ViewName = 'overview' | 'metrics' | 'alerts' | 'settings'
+export type ViewName = 'overview' | 'metrics' | 'zfs' | 'alerts' | 'settings'
 export type AlertStatus = 'CRITICAL' | 'WARNING' | 'CLEAR' | 'UNDEFINED'
 
 export interface AppSettings {
@@ -59,7 +59,42 @@ export interface DashboardData {
   metrics: MetricDefinition[]
   series: Record<string, MetricSeries>
   alerts: NetdataAlert[]
+  zfs: ZfsInventory
   connectedAt: number
+}
+
+export interface ZfsPool {
+  name: string
+  size: number
+  allocated: number
+  free: number
+  fragmentation: number | null
+  capacity: number
+  health: string
+}
+
+export interface ZfsDataset {
+  name: string
+  pool: string
+  parent: string | null
+  depth: number
+  type: string
+  mountpoint: string
+  used: number
+  available: number
+  referenced: number
+  quota: number | null
+  usedBySnapshots: number
+  usedByDataset: number
+  usedByChildren: number
+}
+
+export interface ZfsInventory {
+  available: boolean
+  source: 'local-zfs' | 'demo' | 'unavailable'
+  pools: ZfsPool[]
+  datasets: ZfsDataset[]
+  error?: string
 }
 
 export interface RawChart {
@@ -68,6 +103,7 @@ export interface RawChart {
   title?: string
   family?: string
   context?: string
+  type?: string
   units?: string
   priority?: number
   dimensions?: Record<string, { name?: string }>

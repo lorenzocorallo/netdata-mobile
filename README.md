@@ -16,9 +16,11 @@ See [PROXMOX_DEPLOYMENT.md](./PROXMOX_DEPLOYMENT.md) for service commands, firew
 
 - Mobile overview for CPU, memory, disk, network, and host health
 - Interactive TanStack time-series charts
-- Searchable and favoritable metrics
+- Compact metric-family filtering with no horizontal scrolling
 - Metric details with dimensions and min/current/max values
 - Active and historical Netdata alerts
+- ZFS pool aggregates, health, capacity, fragmentation, and full dataset hierarchy
+- Per-dataset mountpoint, quota, used space, and remaining space from local read-only ZFS commands
 - Configurable refresh interval and API endpoint
 - PWA manifest, offline application shell, and responsive phone navigation
 - Built-in static server and Netdata API bridge using Python's standard library
@@ -37,7 +39,7 @@ Open `http://localhost:5173`. If the agent is not available, switch to **Demo da
 ## Checks
 
 ```bash
-npm run lint
+npm run check
 npm test
 npm run test:server
 npm run test:e2e

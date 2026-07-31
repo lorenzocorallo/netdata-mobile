@@ -1,4 +1,4 @@
-import { clsx, type ClassValue } from 'clsx'
+import { type ClassValue, clsx } from 'clsx'
 import { twMerge } from 'tailwind-merge'
 
 export function cn(...inputs: ClassValue[]) {
@@ -11,12 +11,26 @@ export function clamp(value: number, min = 0, max = 100) {
 
 export function formatValue(value: number, units = '') {
   if (!Number.isFinite(value)) return '—'
+  if (units.toLowerCase() === 'bytes') return formatBytes(value)
   const absolute = Math.abs(value)
   const maximumFractionDigits = absolute >= 100 ? 0 : absolute >= 10 ? 1 : 2
   const formatted = new Intl.NumberFormat('en-US', { maximumFractionDigits }).format(value)
   if (!units) return formatted
-  if (units === '%') return `${formatted}%`
+  if (units === '%' || units.toLowerCase() === 'percentage') return `${formatted}%`
   return `${formatted} ${units}`
+}
+
+export function formatBytes(value: number) {
+  if (!Number.isFinite(value) || value < 0) return '—'
+  const units = ['B', 'KiB', 'MiB', 'GiB', 'TiB', 'PiB']
+  let scaled = value
+  let index = 0
+  while (scaled >= 1024 && index < units.length - 1) {
+    scaled /= 1024
+    index += 1
+  }
+  const digits = scaled >= 100 ? 0 : scaled >= 10 ? 1 : 2
+  return `${scaled.toFixed(digits)} ${units[index]}`
 }
 
 export function timeAgo(timestamp: number) {

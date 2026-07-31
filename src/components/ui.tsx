@@ -1,9 +1,9 @@
-import { forwardRef, type ButtonHTMLAttributes, type HTMLAttributes, type InputHTMLAttributes, type ReactNode } from 'react'
 import { cva, type VariantProps } from 'class-variance-authority'
+import { type ButtonHTMLAttributes, forwardRef, type HTMLAttributes, type InputHTMLAttributes, type ReactNode } from 'react'
 import { cn } from '../lib/utils'
 
 export function Card({ className, ...props }: HTMLAttributes<HTMLDivElement>) {
-  return <div className={cn('rounded-[1.35rem] border border-white/[0.075] bg-card shadow-card', className)} {...props} />
+  return <div className={cn('rounded-xl border border-line bg-card', className)} {...props} />
 }
 
 export function Badge({ children, tone = 'neutral', className }: { children: ReactNode; tone?: 'neutral' | 'success' | 'warning' | 'danger'; className?: string }) {
@@ -15,7 +15,7 @@ export function Badge({ children, tone = 'neutral', className }: { children: Rea
   }, className)}>{children}</span>
 }
 
-const buttonVariants = cva('inline-flex min-h-10 items-center justify-center gap-2 rounded-xl px-4 text-sm font-semibold transition-all focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/60 disabled:pointer-events-none disabled:opacity-50 active:scale-[0.98]', {
+const buttonVariants = cva('inline-flex min-h-9 items-center justify-center gap-2 rounded-lg px-3 text-xs font-semibold transition-all focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-accent/60 disabled:pointer-events-none disabled:opacity-50 active:scale-[0.98]', {
   variants: {
     variant: {
       default: 'bg-accent text-[#071009] hover:bg-accent/90',
@@ -23,7 +23,7 @@ const buttonVariants = cva('inline-flex min-h-10 items-center justify-center gap
       ghost: 'text-muted-foreground hover:bg-white/[0.055] hover:text-foreground',
       danger: 'bg-danger/15 text-danger hover:bg-danger/20'
     },
-    size: { default: '', icon: 'size-10 p-0', sm: 'min-h-8 rounded-lg px-3 text-xs' }
+    size: { default: '', icon: 'size-9 p-0', sm: 'min-h-7 rounded-md px-2.5 text-[10px]' }
   },
   defaultVariants: { variant: 'default', size: 'default' }
 })
@@ -34,7 +34,7 @@ export function Button({ className, variant, size, ...props }: ButtonProps) {
 }
 
 export const Input = forwardRef<HTMLInputElement, InputHTMLAttributes<HTMLInputElement>>(function Input({ className, ...props }, ref) {
-  return <input ref={ref} className={cn('h-11 w-full rounded-xl border border-white/10 bg-black/20 px-3 text-sm text-foreground outline-none transition placeholder:text-muted-foreground focus:border-accent/45 focus:ring-2 focus:ring-accent/10', className)} {...props} />
+  return <input ref={ref} className={cn('h-9 w-full rounded-lg border border-line bg-black/20 px-2.5 text-xs text-foreground outline-none transition placeholder:text-muted-foreground focus:border-accent/45 focus:ring-1 focus:ring-accent/10', className)} {...props} />
 })
 
 export function Switch({ checked, onChange, label }: { checked: boolean; onChange: (checked: boolean) => void; label: string }) {

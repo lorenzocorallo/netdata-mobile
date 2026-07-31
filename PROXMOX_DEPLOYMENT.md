@@ -27,6 +27,8 @@ The installer:
 - listens on `0.0.0.0:19998`;
 - leaves the Netdata configuration and port unchanged.
 
+The service also runs read-only `zpool list` and `zfs list` commands locally to expose pool totals and the complete dataset hierarchy. It never changes pool or dataset properties.
+
 Run the same command again to update an existing installation.
 
 ## Open the web UI
@@ -107,3 +109,4 @@ This removes only Netdata Mobile. It does not change or remove Netdata.
 - **The phone cannot connect:** verify `systemctl status netdata-mobile`, then allow TCP `19998` from the WireGuard or LAN subnet.
 - **502 response:** the UI service is running but cannot reach the agent API on `127.0.0.1:19999`.
 - **Blank or missing charts:** available charts depend on the collectors enabled in Netdata.
+- **ZFS inventory unavailable:** verify `sudo -u netdata-mobile zpool list` and `sudo -u netdata-mobile zfs list` work. On a standard Proxmox ZFS installation, list access is available without root.

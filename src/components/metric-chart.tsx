@@ -1,8 +1,8 @@
-import { useMemo } from 'react'
 import { areaY, defineChart, lineY } from '@tanstack/charts'
 import { tooltip } from '@tanstack/charts/tooltip'
 import { Chart } from '@tanstack/react-charts'
 import { scaleLinear, scaleUtc } from 'd3-scale'
+import { useMemo } from 'react'
 import type { MetricPoint } from '../lib/types'
 
 interface MetricChartProps {
@@ -30,7 +30,7 @@ export function MetricChart({ points, units, height = 180, compact = false, labe
     animate: !window.matchMedia('(prefers-reduced-motion: reduce)').matches
   }), [compact, points, units])
 
-  return <div className={compact ? 'chart-compact' : 'chart-full'}>
-    <Chart definition={definition} height={height} initialWidth={360} ariaLabel={`${label} over time`} ariaDescription={`Time series in ${units || 'units'}`} />
+  return <div className={compact ? 'chart-compact min-w-0 overflow-hidden' : 'chart-full min-w-0 overflow-hidden'}>
+    <Chart definition={definition} height={height} initialWidth={280} ariaLabel={`${label} over time`} ariaDescription={`Time series in ${units || 'units'}`} />
   </div>
 }

@@ -1,41 +1,51 @@
 import { expect, test } from '@playwright/test'
 
-test('works as a mobile Netdata dashboard without horizontal overflow', async ({ page }) => {
+test('stays compact and in bounds across every mobile page', async ({ page }) => {
   const browserErrors: string[] = []
   page.on('pageerror', (error) => browserErrors.push(error.message))
+  await page.setViewportSize({ width: 320, height: 568 })
   await page.goto('/')
-  await expect(page.getByRole('heading', { name: /Good (morning|afternoon|evening)/ })).toBeVisible()
-  await expect(page.getByRole('navigation', { name: 'Primary navigation' }).last()).toBeVisible()
-  await page.locator('.chart-compact').first().scrollIntoViewIfNeeded()
-  await expect(page.locator('.chart-compact svg').first()).toBeVisible()
-
-  const dimensions = await page.evaluate(() => ({ scrollWidth: document.documentElement.scrollWidth, innerWidth: window.innerWidth }))
-  expect(dimensions.scrollWidth).toBeLessThanOrEqual(dimensions.innerWidth)
+  await expect(page.getByRole('heading', { name: 'Overview' })).toBeVisible()
+  await expect(page.locator('header')).toHaveCount(0)
+  await assertNoHorizontalOverflow(page)
 
   await page.getByRole('button', { name: /CPU utilization/ }).click()
   await expect(page.getByRole('dialog')).toBeVisible()
   await expect(page.getByRole('heading', { name: 'CPU utilization' })).toBeVisible()
+  await assertNoHorizontalOverflow(page)
   await page.getByRole('button', { name: 'Close metric details' }).click()
 
-  await page.getByRole('button', { name: 'Search metrics' }).click()
-  const searchDialog = page.getByRole('dialog', { name: 'Search metrics' })
-  await searchDialog.getByRole('textbox').fill('memory')
-  await expect(searchDialog.getByRole('button', { name: /Memory used/ })).toBeVisible()
-  await page.getByRole('button', { name: 'Close search' }).click()
-
-  await page.getByRole('button', { name: /Metrics/ }).last().click()
+  await page.getByRole('button', { name: 'Metrics' }).last().click()
   await expect(page.getByRole('heading', { name: 'Metrics' })).toBeVisible()
-  await page.getByRole('textbox', { name: 'Search metrics' }).fill('zfs')
-  await expect(page.getByText(/charts$/)).toBeVisible()
+  await page.getByLabel('Filter metric family').selectOption('System')
+  await expect(page.getByText(/loaded charts/)).toBeVisible()
+  await assertNoHorizontalOverflow(page)
+
+  await page.getByRole('button', { name: 'ZFS' }).last().click()
+  await expect(page.getByRole('heading', { name: 'ZFS storage' })).toBeVisible()
+  await expect(page.getByText('pool12', { exact: true }).first()).toBeVisible()
+  await expect(page.getByText('pool12/media', { exact: true })).toBeVisible()
+  await expect(page.getByText('aggregate', { exact: true }).first()).toBeVisible()
+  await assertNoHorizontalOverflow(page)
+  await page.screenshot({ path: 'artifacts/mobile-zfs.png', fullPage: true })
 
   await page.getByRole('button', { name: /Alerts/ }).last().click()
   await expect(page.getByRole('heading', { name: 'Alerts' })).toBeVisible()
-  await expect(page.getByText('Disk Space Usage')).toBeVisible()
+  await assertNoHorizontalOverflow(page)
 
   await page.getByRole('button', { name: /Settings/ }).last().click()
   await expect(page.getByRole('heading', { name: 'Settings' })).toBeVisible()
   await expect(page.getByText('API base path')).toBeVisible()
-
+  await assertNoHorizontalOverflow(page)
   expect(browserErrors).toEqual([])
-  await page.screenshot({ path: 'artifacts/mobile-settings.png', fullPage: true })
 })
+
+async function assertNoHorizontalOverflow(page: import('@playwright/test').Page) {
+  const dimensions = await page.evaluate(() => ({
+    body: document.body.scrollWidth,
+    document: document.documentElement.scrollWidth,
+    viewport: window.innerWidth
+  }))
+  expect(dimensions.body).toBeLessThanOrEqual(dimensions.viewport)
+  expect(dimensions.document).toBeLessThanOrEqual(dimensions.viewport)
+}
