@@ -6,6 +6,9 @@ test('stays compact and in bounds across every mobile page', async ({ page }) =>
   await page.setViewportSize({ width: 320, height: 568 })
   await page.goto('/')
   await expect(page.getByRole('heading', { name: 'Overview' })).toBeVisible()
+  await expect(page.getByRole('button', { name: /Disk/ }).first()).not.toHaveText(/0 GiB/)
+  await expect(page.getByText('ZFS ARC cache', { exact: true })).toBeVisible()
+  await expect(page.getByText('VM / LXC memory', { exact: true })).toBeVisible()
   await expect(page.locator('nav[aria-label="Primary navigation"]').getByRole('button', { name: 'ZFS', exact: true })).toHaveCount(0)
   await expect(page.locator('header')).toHaveCount(0)
   await assertNoHorizontalOverflow(page)
@@ -50,11 +53,26 @@ test('stays compact and in bounds across every mobile page', async ({ page }) =>
   await assertNoHorizontalOverflow(page)
   await page.screenshot({ path: 'artifacts/mobile-zfs.png', fullPage: true })
 
+  await page.evaluate(() => window.scrollTo(0, document.body.scrollHeight))
+  await page.waitForTimeout(50)
+  await expect(page.locator('nav[data-compact]')).toHaveAttribute('data-compact', 'true')
+  await page.evaluate(() => window.scrollTo(0, 0))
+  await page.waitForTimeout(50)
+  await expect(page.locator('nav[data-compact]')).toHaveAttribute('data-compact', 'false')
+
   await page.getByRole('button', { name: 'Metrics' }).last().click()
   await expect(page.getByRole('heading', { name: 'Metrics' })).toBeVisible()
-  await page.getByLabel('Filter metric family').selectOption('System')
+  await page.getByLabel('Filter metric type').selectOption('system.cpu')
   await expect(page.getByText(/loaded charts/)).toBeVisible()
+  await page.getByLabel('Filter metric type').selectOption('disk.space')
+  await expect(page.getByText(/4 targets/)).toBeVisible()
+  await page.getByRole('button', { name: /Root filesystem/ }).click()
+  await expect(page.getByLabel('Metric target')).toBeVisible()
+  await page.getByLabel('Metric target').selectOption('disk_space._pool12_media')
+  await expect(page.getByRole('heading', { name: 'Media dataset space' })).toBeVisible()
+  await page.getByRole('button', { name: 'Close metric details' }).click()
   await assertNoHorizontalOverflow(page)
+
 
   await assertNoHorizontalOverflow(page)
 

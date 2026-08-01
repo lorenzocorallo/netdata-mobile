@@ -1,18 +1,17 @@
-import { Activity, ChevronDown, Database, Gauge, HardDrive, Layers3, TriangleAlert } from 'lucide-react'
+import { ChevronDown, ChevronRight, Database, Gauge, HardDrive, Layers3, TriangleAlert } from 'lucide-react'
 import { Badge, Card, EmptyState } from '../components/ui'
-import type { DashboardData, MetricSeries, ZfsDataset, ZfsPool } from '../lib/types'
+import type { DashboardData, ZfsDataset, ZfsPool } from '../lib/types'
 import { clamp, formatBytes } from '../lib/utils'
 
-export function ZfsSection({ data, openMetric }: { data: DashboardData; openMetric: (series: MetricSeries) => void }) {
+export function ZfsSection({ data, onSeeMetrics }: { data: DashboardData; onSeeMetrics: () => void }) {
   const { zfs } = data
-  const mountpoints = new Set(data.zfs.datasets.map((dataset) => dataset.mountpoint))
-  const zfsMetrics = Object.values(data.series).filter((series) => series.definition.context.startsWith('zfs.') || series.definition.context.startsWith('zfspool.') || (series.definition.context === 'disk.space' && mountpoints.has(series.definition.family)))
   const free = zfs.pools.reduce((sum, pool) => sum + pool.free, 0)
   const datasetCount = zfs.datasets.length
   const virtualizationDatasets = zfs.datasets.filter(isVirtualizationDataset)
+  const metricCount = Object.values(data.series).filter((series) => series.definition.context.startsWith('zfs.') || series.definition.context.startsWith('zfspool.') || series.definition.context === 'disk.space').length
 
   return <section className="space-y-3" aria-labelledby="zfs-heading">
-    <div className="flex items-center justify-between gap-3"><div className="min-w-0"><h2 id="zfs-heading" className="text-sm font-semibold">ZFS storage</h2><p className="truncate text-[10px] text-muted-foreground">{data.node.hostname} · pool and dataset inventory</p></div><Database size={17} className="shrink-0 text-accent"/></div>
+    <div className="flex items-center justify-between gap-3"><div className="min-w-0"><h2 id="zfs-heading" className="text-sm font-semibold">ZFS storage</h2><p className="truncate text-[10px] text-muted-foreground">{data.node.hostname} · pool and dataset inventory</p></div><button type="button" onClick={onSeeMetrics} className="flex shrink-0 items-center gap-1 text-[10px] font-semibold text-accent" aria-label="See ZFS metrics">{metricCount ? `${metricCount} metrics` : 'See metrics'}<ChevronRight size={13}/></button></div>
 
     {zfs.available ? <>
       <section className="grid grid-cols-3 gap-1.5" aria-label="ZFS summary">
@@ -26,11 +25,6 @@ export function ZfsSection({ data, openMetric }: { data: DashboardData; openMetr
       </section>
       <VirtualizationDatasetGroup datasets={virtualizationDatasets}/>
     </> : <Card><EmptyState icon={<TriangleAlert size={20}/>} title="ZFS inventory unavailable" description={zfs.error || 'The bundled service could not run zpool and zfs list on this host.'} /></Card>}
-
-    {zfsMetrics.length > 0 && <section>
-      <div className="mb-2 flex items-center justify-between"><h2 className="text-sm font-semibold">ZFS metrics</h2><span className="text-[10px] text-muted-foreground">{zfsMetrics.length} charts</span></div>
-      <Card className="divide-y divide-line overflow-hidden">{zfsMetrics.map((series) => <button type="button" key={series.definition.id} onClick={() => openMetric(series)} className="grid w-full grid-cols-[minmax(0,1fr)_auto] items-center gap-2 px-3 py-2.5 text-left hover:bg-accent/[0.035]"><span className="flex min-w-0 items-center gap-2"><Activity size={14} className="shrink-0 text-accent"/><span className="min-w-0"><span className="block truncate text-xs font-semibold">{series.definition.title}</span><span className="block truncate text-[10px] text-muted-foreground">{series.definition.context}</span></span></span><span className="text-[10px] text-muted-foreground">Open</span></button>)}</Card>
-    </section>}
 
     {zfs.available && <p className="text-[10px] leading-relaxed text-muted-foreground">Pool headers show physical free capacity. Filesystem rows show host-visible used, free, and quota limits. Zvol rows intentionally omit “free”: only the guest filesystem knows that value; ZFS can report its allocated and logical blocks, disk size, reservations, and snapshots.</p>}
   </section>

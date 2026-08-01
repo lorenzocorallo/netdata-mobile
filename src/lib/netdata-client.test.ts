@@ -29,4 +29,12 @@ describe('parseMetricSeries', () => {
     expect(result.min).toBe(4200)
     expect(result.max).toBe(4200)
   })
+
+  it('falls back to available capacity when a disk chart has no used dimension values', () => {
+    const definition = { id: 'disk_space._data', title: 'Data', family: '/data', context: 'disk.space', units: 'GiB', priority: 1, dimensions: [] }
+    const result = parseMetricSeries(definition, { labels: ['time', 'used', 'avail'], data: [[100, 0, 613], [200, 0, 612]] })
+    expect(result.latest).toBe(612)
+    expect(result.min).toBe(612)
+    expect(result.max).toBe(613)
+  })
 })

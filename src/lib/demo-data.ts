@@ -11,12 +11,14 @@ const definitions: MetricDefinition[] = [
   { id: 'system.uptime', title: 'System uptime', family: 'System', context: 'system.uptime', units: 'days', priority: 8, dimensions: ['uptime'] },
   { id: 'sensors.temp', title: 'CPU package', family: 'Sensors', context: 'sensors.temperature', units: '°C', priority: 9, dimensions: ['temperature'] },
   { id: 'apps.cpu', title: 'Applications CPU', family: 'Applications', context: 'apps.cpu', units: '%', priority: 10, dimensions: ['qemu', 'systemd', 'containers'] },
-  { id: 'zfs.arc_size', title: 'ZFS ARC size', family: 'ZFS', context: 'zfs.arc_size', units: 'GiB', priority: 11, dimensions: ['size'] },
-  { id: 'zfspool_pool12_space_usage', title: 'Pool12 space usage', family: 'space usage', context: 'zfspool.pool_space_usage', units: 'bytes', priority: 12, dimensions: ['free', 'used'] },
-  { id: 'zfspool_pool12_fragmentation', title: 'Pool12 fragmentation', family: 'fragmentation', context: 'zfspool.pool_fragmentation', units: '%', priority: 13, dimensions: ['fragmentation'] },
-  { id: 'disk_space._pool12', title: 'Pool12 mount space', family: '/pool12', context: 'disk.space', units: 'GiB', priority: 14, dimensions: ['avail', 'used'] },
-  { id: 'disk_space._pool12_media', title: 'Media dataset space', family: '/pool12/media', context: 'disk.space', units: 'GiB', priority: 15, dimensions: ['avail', 'used'] },
-  { id: 'disk_space._pool12_backups', title: 'Backups dataset space', family: '/pool12/backups', context: 'disk.space', units: 'GiB', priority: 16, dimensions: ['avail', 'used'] }
+  { id: 'cgroup_qemu.memory', title: 'VM memory in use', family: 'VM', context: 'cgroup_qemu.mem_usage', units: 'MiB', priority: 11, dimensions: ['memory'] },
+  { id: 'cgroup_lxc.memory', title: 'LXC memory in use', family: 'LXC', context: 'cgroup_lxc.mem_usage', units: 'MiB', priority: 12, dimensions: ['memory'] },
+  { id: 'zfs.arc_size', title: 'ZFS ARC size', family: 'ZFS', context: 'zfs.arc_size', units: 'GiB', priority: 13, dimensions: ['size'] },
+  { id: 'zfspool_pool12_space_usage', title: 'Pool12 space usage', family: 'space usage', context: 'zfspool.pool_space_usage', units: 'bytes', priority: 14, dimensions: ['free', 'used'] },
+  { id: 'zfspool_pool12_fragmentation', title: 'Pool12 fragmentation', family: 'fragmentation', context: 'zfspool.pool_fragmentation', units: '%', priority: 15, dimensions: ['fragmentation'] },
+  { id: 'disk_space._pool12', title: 'Pool12 mount space', family: '/pool12', context: 'disk.space', units: 'GiB', priority: 16, dimensions: ['avail', 'used'] },
+  { id: 'disk_space._pool12_media', title: 'Media dataset space', family: '/pool12/media', context: 'disk.space', units: 'GiB', priority: 17, dimensions: ['avail', 'used'] },
+  { id: 'disk_space._pool12_backups', title: 'Backups dataset space', family: '/pool12/backups', context: 'disk.space', units: 'GiB', priority: 18, dimensions: ['avail', 'used'] }
 ]
 
 const profiles: Record<string, { base: number; wave: number; noise: number; trend?: number }> = {
@@ -30,6 +32,8 @@ const profiles: Record<string, { base: number; wave: number; noise: number; tren
   'system.uptime': { base: 23.7, wave: 0, noise: 0, trend: 0.1 },
   'sensors.temp': { base: 55.2, wave: 7, noise: 2.2 },
   'apps.cpu': { base: 21.1, wave: 11, noise: 4 },
+  'cgroup_qemu.memory': { base: 4096, wave: 180, noise: 70 },
+  'cgroup_lxc.memory': { base: 2048, wave: 120, noise: 45 },
   'zfs.arc_size': { base: 12.8, wave: 0.8, noise: 0.2 },
   'zfspool_pool12_space_usage': { base: 7_900_000_000_000, wave: 90_000_000_000, noise: 20_000_000_000 },
   'zfspool_pool12_fragmentation': { base: 11, wave: 0.4, noise: 0.1 },

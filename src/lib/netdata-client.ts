@@ -33,6 +33,9 @@ function pickImportant(definitions: MetricDefinition[], zfs: ZfsInventory, count
     const match = definitions.find((definition) => !selected.includes(definition) && (definition.id === prefix || definition.id.startsWith(prefix)))
     if (match) selected.push(match)
   }
+  for (const definition of definitions.filter(isVirtualizationMemoryMetric).slice(0, 6)) {
+    if (!selected.includes(definition)) selected.push(definition)
+  }
   const poolNames = zfs.pools.map((pool) => pool.name.toLowerCase())
   for (const definition of definitions) {
     const context = definition.context.toLowerCase()
@@ -46,6 +49,11 @@ function pickImportant(definitions: MetricDefinition[], zfs: ZfsInventory, count
     if (!selected.includes(definition)) selected.push(definition)
   }
   return selected
+}
+
+function isVirtualizationMemoryMetric(definition: MetricDefinition) {
+  const text = `${definition.id} ${definition.title} ${definition.family} ${definition.context}`.toLowerCase()
+  return /(qemu|lxc|container|cgroup|virtual.?machine|vm)/.test(text) && /(mem|ram)/.test(text)
 }
 
 async function fetchZfsInventory(settings: AppSettings, signal?: AbortSignal): Promise<ZfsInventory> {
@@ -91,7 +99,15 @@ function summaryValues(definition: MetricDefinition, dimensions: string[], rows:
   const preferredDimension = definition.context === 'system.ram' || definition.context === 'disk.space' || definition.context === 'zfspool.pool_space_usage' ? 'used' : null
   const preferredIndex = preferredDimension ? normalized.indexOf(preferredDimension) : -1
   const valueIndex = (preferredIndex >= 0 ? preferredIndex : 0) + 1
-  return rows.map((row) => Number(row[valueIndex] ?? 0))
+  const values = rows.map((row) => Number(row[valueIndex] ?? 0))
+  if (definition.context !== 'disk.space' || values.some((value) => value !== 0)) return values
+
+  // Some Netdata disk charts expose only `avail`/`free` for a mount. Keep the
+  // overview useful instead of displaying a misleading zero when a positive
+  // capacity dimension is available.
+  const fallbackIndex = ['avail', 'available', 'free'].map((name) => normalized.indexOf(name)).find((index) => index >= 0)
+  if (fallbackIndex === undefined) return values
+  return rows.map((row) => Number(row[fallbackIndex + 1] ?? 0))
 }
 
 function parseAlerts(raw: unknown): NetdataAlert[] {
