@@ -2,6 +2,7 @@
 set -Eeuo pipefail
 
 readonly REPOSITORY="lorenzocorallo/netdata-mobile"
+readonly SOURCE_REF="${NETDATA_MOBILE_REF:-main}"
 readonly INSTALL_DIR="/opt/netdata-mobile"
 readonly ENV_FILE="/etc/default/netdata-mobile"
 readonly UNIT_FILE="/etc/systemd/system/netdata-mobile.service"
@@ -16,9 +17,23 @@ if [[ "${EUID}" -ne 0 ]]; then
   fail "Run as root: curl -fsSL https://raw.githubusercontent.com/${REPOSITORY}/main/install.sh | sudo bash"
 fi
 
-for command in curl tar install python3 systemctl useradd; do
-  command -v "${command}" >/dev/null 2>&1 || fail "Required command not found: ${command}"
+for command in curl git node npm install python3 systemctl useradd; do
+  command -v "${command}" >/dev/null 2>&1 || fail "Required command not found: ${command}. Install it before running this installer."
 done
+
+if ! node_version="$(node --version)"; then
+  fail "The installed Node.js command is not usable. Node.js 24 or newer is required."
+fi
+if [[ ! "${node_version}" =~ ^v([0-9]+)\. ]]; then
+  fail "Could not determine the installed Node.js version. Node.js 24 or newer is required."
+fi
+node_major="${BASH_REMATCH[1]}"
+if (( node_major < 24 )); then
+  fail "Node.js 24 or newer is required; found ${node_version}."
+fi
+if ! npm_version="$(npm --version)"; then
+  fail "The installed npm command is not usable."
+fi
 
 if ! curl -fsS --max-time 5 "http://127.0.0.1:${AGENT_PORT}/api/v1/info" >/dev/null; then
   fail "Netdata is not responding at http://127.0.0.1:${AGENT_PORT}. Start the agent, then run this installer again."
@@ -33,11 +48,18 @@ fi
 work_dir="$(mktemp -d)"
 trap 'rm -rf "${work_dir}"' EXIT
 
-log "Downloading ${REPOSITORY}"
-curl -fsSL --retry 3 "https://github.com/${REPOSITORY}/archive/refs/heads/main.tar.gz" -o "${work_dir}/source.tar.gz"
-tar -xzf "${work_dir}/source.tar.gz" -C "${work_dir}"
-source_dir="$(find "${work_dir}" -mindepth 1 -maxdepth 1 -type d -name 'netdata-mobile-*' -print -quit)"
-[[ -n "${source_dir}" && -f "${source_dir}/dist/index.html" ]] || fail "The downloaded package does not contain a production build."
+log "Cloning ${REPOSITORY} (${SOURCE_REF})"
+git clone --depth 1 --single-branch --branch "${SOURCE_REF}" "https://github.com/${REPOSITORY}.git" "${work_dir}/source" \
+  || fail "Could not clone ${REPOSITORY} at ref ${SOURCE_REF}."
+source_dir="${work_dir}/source"
+[[ -f "${source_dir}/package.json" && -f "${source_dir}/package-lock.json" ]] \
+  || fail "The cloned source does not contain the Node.js project files."
+
+log "Building web UI with Node.js ${node_version} and npm ${npm_version}"
+if ! (cd "${source_dir}" && npm ci --no-audit --no-fund && npm run build); then
+  fail "The web UI build failed. Check the Node.js/npm versions and network access, then try again."
+fi
+[[ -f "${source_dir}/dist/index.html" ]] || fail "The web UI build completed without producing dist/index.html."
 
 log "Installing application files"
 if ! id -u netdata-mobile >/dev/null 2>&1; then
