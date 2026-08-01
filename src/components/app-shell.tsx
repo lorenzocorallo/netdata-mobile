@@ -1,4 +1,4 @@
-import { Activity, Bell, Database, Gauge, Settings } from 'lucide-react'
+import { Activity, Bell, Gauge, Settings } from 'lucide-react'
 import type { ReactNode } from 'react'
 import type { ViewName } from '../lib/types'
 import { cn } from '../lib/utils'
@@ -6,7 +6,6 @@ import { cn } from '../lib/utils'
 const navItems: Array<{ id: ViewName; label: string; icon: typeof Gauge }> = [
   { id: 'overview', label: 'Home', icon: Gauge },
   { id: 'metrics', label: 'Metrics', icon: Activity },
-  { id: 'zfs', label: 'ZFS', icon: Database },
   { id: 'alerts', label: 'Alerts', icon: Bell },
   { id: 'settings', label: 'Settings', icon: Settings }
 ]

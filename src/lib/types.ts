@@ -1,5 +1,5 @@
 export type ConnectionMode = 'demo' | 'live'
-export type ViewName = 'overview' | 'metrics' | 'zfs' | 'alerts' | 'settings'
+export type ViewName = 'overview' | 'metrics' | 'alerts' | 'settings'
 export type AlertStatus = 'CRITICAL' | 'WARNING' | 'CLEAR' | 'UNDEFINED'
 
 export interface AppSettings {

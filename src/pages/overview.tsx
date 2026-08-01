@@ -1,7 +1,8 @@
-import { ArrowDown, ArrowUp, BellRing, Cpu, Database, HardDrive, MemoryStick, Network, ShieldCheck } from 'lucide-react'
+import { ArrowDown, ArrowUp, BellRing, Cpu, HardDrive, MemoryStick, Network, ShieldCheck } from 'lucide-react'
 import { Badge, Card } from '../components/ui'
 import type { DashboardData, MetricSeries, ViewName } from '../lib/types'
-import { cn, formatBytes, formatValue, timeAgo } from '../lib/utils'
+import { cn, formatValue, timeAgo } from '../lib/utils'
+import { ZfsSection } from './zfs'
 
 function findSeries(data: DashboardData, terms: string[]) {
   return Object.values(data.series).find((series) => terms.some((term) => `${series.definition.id} ${series.definition.context}`.includes(term)))
@@ -18,7 +19,6 @@ export function OverviewPage({ data, setView, openMetric }: { data: DashboardDat
   ]
   const highlighted = Object.values(data.series).filter((series) => !series.definition.context.startsWith('zfs') && !series.definition.context.startsWith('zfspool')).slice(0, 6)
   const activeAlerts = data.alerts.filter((alert) => alert.status === 'WARNING' || alert.status === 'CRITICAL')
-  const zfsFree = data.zfs.pools.reduce((sum, pool) => sum + pool.free, 0)
 
   return <div className="space-y-4">
     <div className="flex items-center justify-between gap-3"><div className="min-w-0"><h1 className="text-lg font-bold tracking-tight">Overview</h1><p className="truncate text-[11px] text-muted-foreground">{data.node.hostname} · {data.node.version}</p></div><Badge tone={activeAlerts.length ? 'warning' : 'success'}>{activeAlerts.length ? `${activeAlerts.length} active` : 'Healthy'}</Badge></div>
@@ -27,7 +27,7 @@ export function OverviewPage({ data, setView, openMetric }: { data: DashboardDat
       {statSeries.map(({ key, label, series }) => <StatCard key={key} label={label} series={series} icon={iconMap[key as keyof typeof iconMap]} />)}
     </section>
 
-    {data.zfs.available && <button type="button" onClick={() => setView('zfs')} className="block w-full text-left"><Card className="grid grid-cols-[auto_minmax(0,1fr)_auto] items-center gap-2.5 px-3 py-2.5 transition hover:border-accent/25"><span className="grid size-8 place-items-center rounded-lg bg-accent/[0.08] text-accent"><Database size={15}/></span><span className="min-w-0"><span className="block text-xs font-semibold">ZFS storage</span><span className="block truncate text-[10px] text-muted-foreground">{data.zfs.pools.length} pools · {data.zfs.datasets.length} datasets</span></span><span className="text-right"><span className="block text-xs font-bold">{formatBytes(zfsFree)}</span><span className="block text-[9px] text-muted-foreground">free</span></span></Card></button>}
+    <ZfsSection data={data} openMetric={openMetric}/>
 
     <section><SectionTitle title="Live metrics" action="All metrics" onAction={() => setView('metrics')} /><Card className="divide-y divide-line overflow-hidden">{highlighted.map((series) => <button type="button" key={series.definition.id} onClick={() => openMetric(series)} className="grid w-full grid-cols-[minmax(0,1fr)_auto] items-center gap-2 px-3 py-2.5 text-left transition hover:bg-accent/[0.035]"><span className="min-w-0"><span className="block truncate text-xs font-semibold">{series.definition.title}</span><span className="block truncate text-[9px] text-muted-foreground">{series.definition.family}</span></span><span className="text-right"><span className="block text-xs font-bold">{formatValue(series.latest, series.definition.units)}</span><span className={cn('flex items-center justify-end text-[9px]', series.change > 0 ? 'text-warning' : 'text-accent')}>{series.change > 0 ? <ArrowUp size={9}/> : <ArrowDown size={9}/>} {Math.abs(series.change).toFixed(1)}%</span></span></button>)}</Card></section>
 

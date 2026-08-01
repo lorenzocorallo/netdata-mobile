@@ -1,17 +1,18 @@
-import { Activity, Database, Gauge, HardDrive, Layers3, TriangleAlert } from 'lucide-react'
+import { Activity, ChevronDown, Database, Gauge, HardDrive, Layers3, TriangleAlert } from 'lucide-react'
 import { Badge, Card, EmptyState } from '../components/ui'
 import type { DashboardData, MetricSeries, ZfsDataset, ZfsPool } from '../lib/types'
 import { clamp, formatBytes } from '../lib/utils'
 
-export function ZfsPage({ data, openMetric }: { data: DashboardData; openMetric: (series: MetricSeries) => void }) {
+export function ZfsSection({ data, openMetric }: { data: DashboardData; openMetric: (series: MetricSeries) => void }) {
   const { zfs } = data
   const mountpoints = new Set(data.zfs.datasets.map((dataset) => dataset.mountpoint))
   const zfsMetrics = Object.values(data.series).filter((series) => series.definition.context.startsWith('zfs.') || series.definition.context.startsWith('zfspool.') || (series.definition.context === 'disk.space' && mountpoints.has(series.definition.family)))
   const free = zfs.pools.reduce((sum, pool) => sum + pool.free, 0)
   const datasetCount = zfs.datasets.length
+  const proxmoxVolumes = zfs.datasets.filter(isProxmoxVolume)
 
-  return <div className="space-y-4">
-    <PageTitle title="ZFS storage" detail={`${data.node.hostname} · live inventory`} />
+  return <section className="space-y-3" aria-labelledby="zfs-heading">
+    <div className="flex items-center justify-between gap-3"><div className="min-w-0"><h2 id="zfs-heading" className="text-sm font-semibold">ZFS storage</h2><p className="truncate text-[10px] text-muted-foreground">{data.node.hostname} · pool and dataset inventory</p></div><Database size={17} className="shrink-0 text-accent"/></div>
 
     {zfs.available ? <>
       <section className="grid grid-cols-3 gap-1.5" aria-label="ZFS summary">
@@ -23,6 +24,7 @@ export function ZfsPage({ data, openMetric }: { data: DashboardData; openMetric:
       <section className="space-y-2">
         {zfs.pools.map((pool) => <PoolCard key={pool.name} pool={pool} datasets={zfs.datasets.filter((dataset) => dataset.pool === pool.name)} />)}
       </section>
+      <ProxmoxVolumeGroup volumes={proxmoxVolumes}/>
     </> : <Card><EmptyState icon={<TriangleAlert size={20}/>} title="ZFS inventory unavailable" description={zfs.error || 'The bundled service could not run zpool and zfs list on this host.'} /></Card>}
 
     {zfsMetrics.length > 0 && <section>
@@ -31,11 +33,7 @@ export function ZfsPage({ data, openMetric }: { data: DashboardData; openMetric:
     </section>}
 
     {zfs.available && <p className="text-[10px] leading-relaxed text-muted-foreground">Pool headers show physical free capacity. Filesystem rows show host-visible used, free, and quota limits. Zvol rows intentionally omit “free”: only the guest filesystem knows that value; ZFS can report its allocated and logical blocks, disk size, reservations, and snapshots.</p>}
-  </div>
-}
-
-function PageTitle({ title, detail }: { title: string; detail: string }) {
-  return <div className="flex items-center justify-between gap-3"><div className="min-w-0"><h1 className="text-lg font-bold tracking-tight">{title}</h1><p className="truncate text-[11px] text-muted-foreground">{detail}</p></div><Database size={18} className="shrink-0 text-accent"/></div>
+  </section>
 }
 
 function MiniStat({ icon: Icon, label, value }: { icon: typeof Database; label: string; value: string }) {
@@ -45,6 +43,7 @@ function MiniStat({ icon: Icon, label, value }: { icon: typeof Database; label: 
 function PoolCard({ pool, datasets }: { pool: ZfsPool; datasets: ZfsDataset[] }) {
   const percent = pool.size ? clamp((pool.allocated / pool.size) * 100) : pool.capacity
   const healthy = pool.health.toUpperCase() === 'ONLINE'
+  const visibleDatasets = datasets.filter((dataset) => !isProxmoxVolume(dataset))
   return <Card className="overflow-hidden">
     <div className="px-3 py-3">
       <div className="grid grid-cols-[minmax(0,1fr)_auto] items-start gap-3"><div className="min-w-0"><div className="flex items-center gap-2"><h2 className="truncate text-sm font-bold">{pool.name}</h2><Badge tone={healthy ? 'success' : 'danger'}>{pool.health}</Badge></div><p className="mt-1 text-[10px] text-muted-foreground">{formatBytes(pool.allocated)} used of {formatBytes(pool.size)}</p></div><div className="text-right"><p className="text-sm font-bold text-accent">{formatBytes(pool.free)}</p><p className="text-[9px] text-muted-foreground">remaining</p></div></div>
@@ -52,9 +51,22 @@ function PoolCard({ pool, datasets }: { pool: ZfsPool; datasets: ZfsDataset[] })
       <div className="mt-2 flex gap-3 text-[9px] text-muted-foreground"><span>{percent.toFixed(1)}% used</span><span>{pool.fragmentation === null ? '—' : `${pool.fragmentation}%`} fragmented</span><span>{datasets.length} dataset{datasets.length === 1 ? '' : 's'}</span></div>
     </div>
     <div className="border-t border-line bg-black/10">
-      {datasets.map((dataset) => <DatasetRow key={dataset.name} dataset={dataset} />)}
+      {visibleDatasets.map((dataset) => <DatasetRow key={dataset.name} dataset={dataset} />)}
     </div>
   </Card>
+}
+
+function ProxmoxVolumeGroup({ volumes }: { volumes: ZfsDataset[] }) {
+  if (volumes.length === 0) return null
+  const allocated = volumes.reduce((sum, volume) => sum + volume.usedByDataset, 0)
+  return <details className="overflow-hidden rounded-xl border border-line bg-card">
+    <summary className="flex cursor-pointer list-none items-center gap-2.5 px-3 py-2.5 marker:hidden [&::-webkit-details-marker]:hidden"><span className="grid size-7 shrink-0 place-items-center rounded-md bg-accent/[0.07] text-accent"><Layers3 size={14}/></span><span className="min-w-0 flex-1"><span className="block text-xs font-semibold">VM/LXC volumes</span><span className="block truncate text-[9px] text-muted-foreground">{volumes.length} grouped volumes · {formatBytes(allocated)} allocated</span></span><ChevronDown size={15} className="shrink-0 text-muted-foreground"/></summary>
+    <div className="border-t border-line bg-black/10">{volumes.map((dataset) => <DatasetRow key={dataset.name} dataset={dataset}/>)}</div>
+  </details>
+}
+
+function isProxmoxVolume(dataset: ZfsDataset) {
+  return dataset.type === 'volume' && /(?:^|\/)(?:vm|subvol|base)-\d+(?:-|$)/.test(dataset.name)
 }
 
 function DatasetRow({ dataset }: { dataset: ZfsDataset }) {
