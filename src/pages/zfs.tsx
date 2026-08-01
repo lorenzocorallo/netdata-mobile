@@ -9,7 +9,7 @@ export function ZfsSection({ data, openMetric }: { data: DashboardData; openMetr
   const zfsMetrics = Object.values(data.series).filter((series) => series.definition.context.startsWith('zfs.') || series.definition.context.startsWith('zfspool.') || (series.definition.context === 'disk.space' && mountpoints.has(series.definition.family)))
   const free = zfs.pools.reduce((sum, pool) => sum + pool.free, 0)
   const datasetCount = zfs.datasets.length
-  const proxmoxVolumes = zfs.datasets.filter(isProxmoxVolume)
+  const virtualizationDatasets = zfs.datasets.filter(isVirtualizationDataset)
 
   return <section className="space-y-3" aria-labelledby="zfs-heading">
     <div className="flex items-center justify-between gap-3"><div className="min-w-0"><h2 id="zfs-heading" className="text-sm font-semibold">ZFS storage</h2><p className="truncate text-[10px] text-muted-foreground">{data.node.hostname} · pool and dataset inventory</p></div><Database size={17} className="shrink-0 text-accent"/></div>
@@ -24,7 +24,7 @@ export function ZfsSection({ data, openMetric }: { data: DashboardData; openMetr
       <section className="space-y-2">
         {zfs.pools.map((pool) => <PoolCard key={pool.name} pool={pool} datasets={zfs.datasets.filter((dataset) => dataset.pool === pool.name)} />)}
       </section>
-      <ProxmoxVolumeGroup volumes={proxmoxVolumes}/>
+      <VirtualizationDatasetGroup datasets={virtualizationDatasets}/>
     </> : <Card><EmptyState icon={<TriangleAlert size={20}/>} title="ZFS inventory unavailable" description={zfs.error || 'The bundled service could not run zpool and zfs list on this host.'} /></Card>}
 
     {zfsMetrics.length > 0 && <section>
@@ -43,7 +43,7 @@ function MiniStat({ icon: Icon, label, value }: { icon: typeof Database; label: 
 function PoolCard({ pool, datasets }: { pool: ZfsPool; datasets: ZfsDataset[] }) {
   const percent = pool.size ? clamp((pool.allocated / pool.size) * 100) : pool.capacity
   const healthy = pool.health.toUpperCase() === 'ONLINE'
-  const visibleDatasets = datasets.filter((dataset) => !isProxmoxVolume(dataset))
+  const visibleDatasets = datasets.filter((dataset) => !isVirtualizationDataset(dataset))
   return <Card className="overflow-hidden">
     <div className="px-3 py-3">
       <div className="grid grid-cols-[minmax(0,1fr)_auto] items-start gap-3"><div className="min-w-0"><div className="flex items-center gap-2"><h2 className="truncate text-sm font-bold">{pool.name}</h2><Badge tone={healthy ? 'success' : 'danger'}>{pool.health}</Badge></div><p className="mt-1 text-[10px] text-muted-foreground">{formatBytes(pool.allocated)} used of {formatBytes(pool.size)}</p></div><div className="text-right"><p className="text-sm font-bold text-accent">{formatBytes(pool.free)}</p><p className="text-[9px] text-muted-foreground">remaining</p></div></div>
@@ -56,23 +56,28 @@ function PoolCard({ pool, datasets }: { pool: ZfsPool; datasets: ZfsDataset[] })
   </Card>
 }
 
-function ProxmoxVolumeGroup({ volumes }: { volumes: ZfsDataset[] }) {
-  if (volumes.length === 0) return null
-  const allocated = volumes.reduce((sum, volume) => sum + volume.usedByDataset, 0)
-  const logicalSize = volumes.reduce((sum, volume) => sum + (volume.volumeSize ?? 0), 0)
-  const reservations = volumes.reduce((sum, volume) => sum + (volume.refReservation ?? 0), 0)
-  const automaticReservations = volumes.filter((volume) => volume.refReservationAuto).length
-  const snapshots = volumes.reduce((sum, volume) => sum + volume.usedBySnapshots, 0)
+function VirtualizationDatasetGroup({ datasets }: { datasets: ZfsDataset[] }) {
+  if (datasets.length === 0) return null
+  const allocated = datasets.reduce((sum, dataset) => sum + dataset.usedByDataset, 0)
+  const logicalSize = datasets.reduce((sum, dataset) => sum + getLogicalSize(dataset), 0)
+  const reservations = datasets.reduce((sum, dataset) => sum + (dataset.refReservation ?? 0), 0)
+  const automaticReservations = datasets.filter((dataset) => dataset.refReservationAuto).length
+  const snapshots = datasets.reduce((sum, dataset) => sum + dataset.usedBySnapshots, 0)
   const percent = logicalSize > 0 ? clamp((allocated / logicalSize) * 100) : 0
   return <details className="overflow-hidden rounded-xl border border-line bg-card">
-    <summary className="flex cursor-pointer list-none items-center gap-2.5 px-3 py-2.5 marker:hidden [&::-webkit-details-marker]:hidden"><span className="grid size-7 shrink-0 place-items-center rounded-md bg-accent/[0.07] text-accent"><Layers3 size={14}/></span><span className="min-w-0 flex-1"><span className="block text-xs font-semibold">VM volumes</span><span className="block truncate text-[9px] text-muted-foreground">{volumes.length} volumes · {formatBytes(allocated)} allocated</span></span><span className="shrink-0 text-right"><span className="block text-xs font-bold">{formatBytes(logicalSize)}</span><span className="block text-[8px] text-muted-foreground">logical size</span></span><ChevronDown size={15} className="shrink-0 text-muted-foreground"/></summary>
+    <summary className="flex cursor-pointer list-none items-center gap-2.5 px-3 py-2.5 marker:hidden [&::-webkit-details-marker]:hidden"><span className="grid size-7 shrink-0 place-items-center rounded-md bg-accent/[0.07] text-accent"><Layers3 size={14}/></span><span className="min-w-0 flex-1"><span className="block text-xs font-semibold">VM / LXC volumes</span><span className="block truncate text-[9px] text-muted-foreground">{datasets.length} volumes · {formatBytes(allocated)} allocated</span></span><span className="shrink-0 text-right"><span className="block text-xs font-bold">{formatBytes(logicalSize)}</span><span className="block text-[8px] text-muted-foreground">logical size</span></span><ChevronDown size={15} className="shrink-0 text-muted-foreground"/></summary>
     <div className="border-t border-line px-3 py-2.5"><div className="h-1 overflow-hidden rounded-full bg-white/[0.06]"><div className="h-full rounded-full bg-accent" style={{ width: `${percent}%` }}/></div><div className="mt-1.5 flex gap-3 text-[9px] text-muted-foreground"><span>{percent.toFixed(1)}% allocated</span><span>{reservations > 0 ? `${formatBytes(reservations)} reserved` : automaticReservations > 0 ? `${automaticReservations} auto reservations` : 'no reservations'}</span><span>{snapshots > 0 ? `${formatBytes(snapshots)} snapshots` : 'no snapshots'}</span></div></div>
-    <div className="border-t border-line bg-black/10">{volumes.map((dataset) => <DatasetRow key={dataset.name} dataset={dataset}/>)}</div>
+    <div className="border-t border-line bg-black/10">{datasets.map((dataset) => <DatasetRow key={dataset.name} dataset={dataset}/>)}</div>
   </details>
 }
 
-function isProxmoxVolume(dataset: ZfsDataset) {
-  return dataset.type === 'volume' && /(?:^|\/)(?:vm|base)-\d+(?:-|$)/.test(dataset.name)
+function isVirtualizationDataset(dataset: ZfsDataset) {
+  return /(?:^|\/)(?:vm|subvol|base)-\d+(?:-|$)/.test(dataset.name)
+}
+
+function getLogicalSize(dataset: ZfsDataset) {
+  if (dataset.volumeSize !== null) return dataset.volumeSize
+  return dataset.type === 'filesystem' ? dataset.used + dataset.available : 0
 }
 
 function DatasetRow({ dataset }: { dataset: ZfsDataset }) {
