@@ -59,14 +59,20 @@ function PoolCard({ pool, datasets }: { pool: ZfsPool; datasets: ZfsDataset[] })
 function ProxmoxVolumeGroup({ volumes }: { volumes: ZfsDataset[] }) {
   if (volumes.length === 0) return null
   const allocated = volumes.reduce((sum, volume) => sum + volume.usedByDataset, 0)
+  const logicalSize = volumes.reduce((sum, volume) => sum + (volume.volumeSize ?? 0), 0)
+  const reservations = volumes.reduce((sum, volume) => sum + (volume.refReservation ?? 0), 0)
+  const automaticReservations = volumes.filter((volume) => volume.refReservationAuto).length
+  const snapshots = volumes.reduce((sum, volume) => sum + volume.usedBySnapshots, 0)
+  const percent = logicalSize > 0 ? clamp((allocated / logicalSize) * 100) : 0
   return <details className="overflow-hidden rounded-xl border border-line bg-card">
-    <summary className="flex cursor-pointer list-none items-center gap-2.5 px-3 py-2.5 marker:hidden [&::-webkit-details-marker]:hidden"><span className="grid size-7 shrink-0 place-items-center rounded-md bg-accent/[0.07] text-accent"><Layers3 size={14}/></span><span className="min-w-0 flex-1"><span className="block text-xs font-semibold">VM/LXC volumes</span><span className="block truncate text-[9px] text-muted-foreground">{volumes.length} grouped volumes · {formatBytes(allocated)} allocated</span></span><ChevronDown size={15} className="shrink-0 text-muted-foreground"/></summary>
+    <summary className="flex cursor-pointer list-none items-center gap-2.5 px-3 py-2.5 marker:hidden [&::-webkit-details-marker]:hidden"><span className="grid size-7 shrink-0 place-items-center rounded-md bg-accent/[0.07] text-accent"><Layers3 size={14}/></span><span className="min-w-0 flex-1"><span className="block text-xs font-semibold">VM volumes</span><span className="block truncate text-[9px] text-muted-foreground">{volumes.length} volumes · {formatBytes(allocated)} allocated</span></span><span className="shrink-0 text-right"><span className="block text-xs font-bold">{formatBytes(logicalSize)}</span><span className="block text-[8px] text-muted-foreground">logical size</span></span><ChevronDown size={15} className="shrink-0 text-muted-foreground"/></summary>
+    <div className="border-t border-line px-3 py-2.5"><div className="h-1 overflow-hidden rounded-full bg-white/[0.06]"><div className="h-full rounded-full bg-accent" style={{ width: `${percent}%` }}/></div><div className="mt-1.5 flex gap-3 text-[9px] text-muted-foreground"><span>{percent.toFixed(1)}% allocated</span><span>{reservations > 0 ? `${formatBytes(reservations)} reserved` : automaticReservations > 0 ? `${automaticReservations} auto reservations` : 'no reservations'}</span><span>{snapshots > 0 ? `${formatBytes(snapshots)} snapshots` : 'no snapshots'}</span></div></div>
     <div className="border-t border-line bg-black/10">{volumes.map((dataset) => <DatasetRow key={dataset.name} dataset={dataset}/>)}</div>
   </details>
 }
 
 function isProxmoxVolume(dataset: ZfsDataset) {
-  return dataset.type === 'volume' && /(?:^|\/)(?:vm|subvol|base)-\d+(?:-|$)/.test(dataset.name)
+  return dataset.type === 'volume' && /(?:^|\/)(?:vm|base)-\d+(?:-|$)/.test(dataset.name)
 }
 
 function DatasetRow({ dataset }: { dataset: ZfsDataset }) {
@@ -82,7 +88,7 @@ function DatasetRow({ dataset }: { dataset: ZfsDataset }) {
   const badge = isRoot ? 'Aggregate' : overcommitted ? 'High quota' : limit.kind === 'unlimited' ? 'Unlimited' : 'Limited'
   return <div className="border-b border-line px-3 py-2.5 last:border-b-0">
     <div className="min-w-0" style={{ paddingLeft: `${Math.min(dataset.depth, 3) * 10}px` }}>
-      <div className="flex min-w-0 items-center gap-1.5">{isRoot ? <Gauge size={12} className="shrink-0 text-accent"/> : <i className="size-1 shrink-0 rounded-full bg-[#365942]"/>}<p className="min-w-0 flex-1 truncate text-[11px] font-semibold" title={dataset.name}>{dataset.name}</p><Badge tone={overcommitted ? 'warning' : limit.kind === 'unlimited' ? 'neutral' : 'success'} className="shrink-0 px-1.5 py-px text-[7px]">{badge}</Badge></div>
+      <div className="flex min-w-0 items-center gap-1.5">{isRoot ? <Gauge size={12} className="shrink-0 text-accent"/> : <i className="size-1 shrink-0 rounded-full bg-[#596864]"/>}<p className="min-w-0 flex-1 truncate text-[11px] font-semibold" title={dataset.name}>{dataset.name}</p><Badge tone={overcommitted ? 'warning' : limit.kind === 'unlimited' ? 'neutral' : 'success'} className="shrink-0 px-1.5 py-px text-[7px]">{badge}</Badge></div>
       <p className="mt-0.5 truncate text-[9px] text-muted-foreground" title={dataset.mountpoint}>{dataset.mountpoint === '-' ? 'block volume' : dataset.mountpoint}</p>
       <dl className="mt-2 grid grid-cols-3 gap-1.5">
         <DatasetValue label="Used" value={formatBytes(dataset.used)} />
@@ -90,7 +96,7 @@ function DatasetRow({ dataset }: { dataset: ZfsDataset }) {
         <DatasetValue label={limit.label} value={limit.value === null ? 'Unlimited' : formatBytes(limit.value)} highlight={overcommitted} />
       </dl>
     </div>
-    <div className="mt-1.5 ml-auto h-0.5 overflow-hidden rounded-full bg-white/[0.05]" style={{ width: `calc(100% - ${Math.min(dataset.depth, 3) * 10}px)` }}><div className="h-full bg-[#477a57]" style={{ width: `${percent}%` }}/></div>
+    <div className="mt-1.5 ml-auto h-0.5 overflow-hidden rounded-full bg-white/[0.05]" style={{ width: `calc(100% - ${Math.min(dataset.depth, 3) * 10}px)` }}><div className="h-full bg-[#66766f]" style={{ width: `${percent}%` }}/></div>
   </div>
 }
 
@@ -106,7 +112,7 @@ function VolumeRow({ dataset }: { dataset: ZfsDataset }) {
   const modeLabel = mode === 'unknown' ? 'Zvol' : mode === 'partial' ? 'Partial reserve' : mode
   return <div className="border-b border-line px-3 py-2.5 last:border-b-0">
     <div className="min-w-0" style={{ paddingLeft: `${Math.min(dataset.depth, 3) * 10}px` }}>
-      <div className="flex min-w-0 items-center gap-1.5"><i className="size-1 shrink-0 rounded-full bg-[#365942]"/><p className="min-w-0 flex-1 truncate text-[11px] font-semibold" title={dataset.name}>{dataset.name}</p><Badge tone={mode === 'thick' ? 'success' : mode === 'unknown' ? 'neutral' : 'warning'} className="shrink-0 px-1.5 py-px text-[7px]">{modeLabel}</Badge></div>
+      <div className="flex min-w-0 items-center gap-1.5"><i className="size-1 shrink-0 rounded-full bg-[#596864]"/><p className="min-w-0 flex-1 truncate text-[11px] font-semibold" title={dataset.name}>{dataset.name}</p><Badge tone={mode === 'thick' ? 'success' : mode === 'unknown' ? 'neutral' : 'warning'} className="shrink-0 px-1.5 py-px text-[7px]">{modeLabel}</Badge></div>
       <p className="mt-0.5 truncate text-[9px] text-muted-foreground">VM block volume · guest free space unavailable</p>
       <dl className="mt-2 grid grid-cols-3 gap-1.5">
         <DatasetValue label="ZFS allocated" value={formatBytes(allocated)} />
@@ -115,7 +121,7 @@ function VolumeRow({ dataset }: { dataset: ZfsDataset }) {
       </dl>
       <p className="mt-1.5 truncate text-[8px] text-muted-foreground" title={`${automaticReservation ? 'Automatic reservation' : reservation ? `${formatBytes(reservation)} reserved` : 'No reservation'} · ${snapshots ? `${formatBytes(snapshots)} snapshots` : 'no snapshots'}`}>{automaticReservation ? 'Automatic reservation' : reservation ? `${formatBytes(reservation)} reserved` : 'No reservation'} · {snapshots ? `${formatBytes(snapshots)} snapshots` : 'no snapshots'}</p>
     </div>
-    <div className="mt-1.5 ml-auto h-0.5 overflow-hidden rounded-full bg-white/[0.05]" style={{ width: `calc(100% - ${Math.min(dataset.depth, 3) * 10}px)` }}><div className="h-full bg-[#477a57]" style={{ width: `${percent}%` }}/></div>
+    <div className="mt-1.5 ml-auto h-0.5 overflow-hidden rounded-full bg-white/[0.05]" style={{ width: `calc(100% - ${Math.min(dataset.depth, 3) * 10}px)` }}><div className="h-full bg-[#66766f]" style={{ width: `${percent}%` }}/></div>
   </div>
 }
 

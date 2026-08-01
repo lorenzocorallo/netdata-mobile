@@ -18,7 +18,7 @@ export function Badge({ children, tone = 'neutral', className }: { children: Rea
 const buttonVariants = cva('inline-flex min-h-9 items-center justify-center gap-2 rounded-lg px-3 text-xs font-semibold transition-all focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-accent/60 disabled:pointer-events-none disabled:opacity-50 active:scale-[0.98]', {
   variants: {
     variant: {
-      default: 'bg-accent text-[#071009] hover:bg-accent/90',
+      default: 'bg-accent text-[#0b0d0c] hover:bg-accent/90',
       secondary: 'border border-white/10 bg-white/[0.055] text-foreground hover:bg-white/[0.09]',
       ghost: 'text-muted-foreground hover:bg-white/[0.055] hover:text-foreground',
       danger: 'bg-danger/15 text-danger hover:bg-danger/20'
